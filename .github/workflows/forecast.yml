@@ -1,0 +1,108 @@
+name: Forecast data
+
+# Every 6 h (18:00, 00:00, 06:00, 12:00 HST):
+#  - rebuilds the WRF forecast JSON when a new model run is out, and archives
+#    that run (archive/forecast/) since it can never be fetched again later;
+#  - merges the last 7 days of observed wind (Kahului Harbor + Airport) into
+#    archive/obs/.
+# When anything changed it force-pushes the data dir to the orphan `data`
+# branch (one commit, so git history never grows; archive files accumulate)
+# and redeploys the site.
+on:
+  schedule:
+    - cron: "0 4,10,16,22 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if the model run is unchanged
+        type: boolean
+        default: false
+      obs_days:
+        description: Days of observations to fetch (e.g. 400 to backfill Kahului Harbor history)
+        type: number
+        default: 7
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: write
+
+concurrency:
+  group: forecast
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      changed: ${{ steps.build.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The archive only exists on the data branch: if it can't be restored,
+      # stop rather than publish an empty one.
+      - name: Restore previously published data
+        id: restore
+        run: |
+          mkdir -p data
+          set +e
+          git ls-remote --exit-code --heads origin data >/dev/null
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            git fetch --depth=1 origin data
+            git archive FETCH_HEAD | tar -x -C data
+            old=$(git ls-tree -r --name-only FETCH_HEAD -- archive | grep '\.json$' | grep -vc '^archive/index\.json$' || true)
+            echo "archive_files=$old" >> "$GITHUB_OUTPUT"
+            echo "Restored data branch with $old archive files"
+          elif [ "$rc" -eq 2 ]; then
+            echo "archive_files=0" >> "$GITHUB_OUTPUT"
+            echo "No data branch yet (first run)"
+          else
+            echo "::error::git ls-remote failed ($rc)"; exit "$rc"
+          fi
+
+      - name: Build forecast JSON
+        id: build
+        working-directory: pipeline
+        run: python -m makani.build --out ../data --obs-days ${{ inputs.obs_days || 7 }} ${{ inputs.force && '--force' || '' }}
+
+      - name: Publish to data branch
+        if: steps.build.outputs.changed == 'true'
+        working-directory: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          new=$(find archive -name '*.json' ! -path 'archive/index.json' | wc -l | tr -d ' ')
+          old="${{ steps.restore.outputs.archive_files }}"
+          if [ "$new" -lt "$old" ]; then
+            echo "::error::Archive would shrink from $old to $new files; refusing to publish"; exit 1
+          fi
+          git init -q -b data
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "Forecast data, WRF run ending $(jq -r '.wrf.coverageEnd' meta.json)"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
+
+      # Scheduled workflows in public repos are disabled after 60 days without
+      # activity; re-enabling via the API resets that timer.
+      - name: Keep schedule alive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/forecast.yml/enable" || true
+
+  deploy:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'true'
+    uses: ./.github/workflows/deploy.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

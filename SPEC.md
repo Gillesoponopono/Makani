@@ -20,6 +20,7 @@ A free, mobile-first wind forecast website for kitesurfers, wing foilers and kit
 4. Make safety obvious: offshore or dangerous directions are flagged at every spot.
 5. Optional alerts by email and Chrome (Web Push) when a spot's wind is inside the user's own knots range.
 6. Fully free to run and easy to maintain alone.
+7. Go back in time and compare what was forecast with the wind that actually blew (§3.2, §7.6, §8.6).
 
 ### Non-goals (v1)
 - User accounts or passwords (magic links only).
@@ -43,7 +44,8 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 |---|---|---|---|
 | **PacIOOS WRF `wrf_mo`** (ERDDAP griddap) | 10 m wind U/V, air temp, rain, ~2 km grid, hourly | GitHub Action | every 6 h, skipped if no new run |
 | **NWS gridpoint raw forecast** (`api.weather.gov/gridpoints/HFO/x,y`) | Hourly wind speed, **gusts** and direction per spot (second opinion) | GitHub Action | every 6 h |
-| **NWS observations** (`/stations/{id}/observations`) | Measured wind and gusts now (Kahului Airport `PHOG` and nearby stations) | **Browser, live** (API sends `Access-Control-Allow-Origin: *`), plus the Action for verification history | on page load / every 10 min while open |
+| **NOAA CO-OPS Kahului Harbor wind** (station `1615680`, `product=wind`) | Measured wind, direction, gusts on the waterfront, 6-min data, **years of history** | GitHub Action → observation archive | every 6 h (last 7 days re-merged); one-off backfill |
+| **NWS observations** (`/stations/PHOG/observations`) | Measured wind and gusts at Kahului Airport (ASOS) | **Browser, live** for "now" (API sends `Access-Control-Allow-Origin: *`), plus the Action → observation archive | on page load / every 10 min while open; Action every 6 h |
 | **NWS active alerts** (`/alerts/active?zone=…`) | Wind Advisory, Small Craft Advisory, High Surf, etc. | Browser live + Action (for alert emails) | on page load / every 6 h |
 | **NWS Coastal Waters Forecast** (`/products/types/CWF/locations/HFO`) | Marine text for zones `PHZ117` Maui County Windward Waters and `PHZ119` Maalaea Bay | GitHub Action | every 6 h |
 | **NOAA CO-OPS tide predictions** | High/low tides and an hourly curve | GitHub Action | daily (predictions are deterministic) |
@@ -59,7 +61,16 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 - License: free use and redistribution, no warranty. Attribution to PacIOOS / UH (Yi-Leng Chen) is required.
 - **The server is slow**: queries over the 142k-step time axis can take minutes. Always bound the time range explicitly, use long timeouts (300 s) and retries with backoff, and never block the site on it.
 
-### 3.2 NWS facts (checked 2026-11-13)
+### 3.2 Observed wind ("what actually happened", checked 2026-11-13)
+| Station | Where | Data | History | Notes |
+|---|---|---|---|---|
+| **Kahului Harbor** CO-OPS `1615680` | waterfront, ~2 km W of Kanahā (20.8949, −156.469) | speed, direction, gust every 6 min; `units=english` = knots (verified: 12.44 kn = 6.4 m/s) | back to at least 2020; **31-day limit per request** | best match for Kanahā/Sprecks conditions on the water |
+| **Kahului Airport** NWS `PHOG` | ~1 km inland (20.8925, −156.437) | ASOS, ~hourly at :54 (+ specials); km/h → kn; gust only when reported | **API keeps ~7 days only** | recent values often arrive empty (QC `Z`) and get filled later; usually reads lower than on the water |
+| **Kīhei** | — | no free official station found | — | Maui Sunset has no observed reference yet; Synoptic/MesoWest (free key) to investigate |
+
+Because the NWS API forgets after a week, and because the ERDDAP "best" series overwrites past hours with newer model analysis, **both the observations and every forecast run must be archived by us as they come in** (§7.6). Forecasts can't be recovered later; Harbor observations can be backfilled.
+
+### 3.3 NWS facts (checked 2026-11-13)
 - Forecast office: **HFO** (Honolulu).
 - Gridpoints: Kanaha `HFO/213,126`, Sprecks `HFO/215,127`, Maui Sunset `HFO/213,120`.
 - Land zones: `HIZ045` (Kanaha, Sprecks), `HIZ049` (Kihei). Marine zones: `PHZ117`, `PHZ119`.
@@ -109,6 +120,7 @@ Each hour gets one or more sport icons from the **WRF sustained wind** at the sp
 | — | Too light | < 10 |
 
 - Bands overlap on purpose: 16 kn shows foil/wing **and** directional.
+- Bands are applied to the **whole knots the site displays** (the 1-decimal value rounded half-up), so a row reading "10" never says "too light". Alerts use the same value.
 - Emoji are placeholders. Ship custom monochrome SVG icons (wing, kite-foil, surfboard, twin tip, bolt) that also work in dark mode.
 - Every icon has a text label or tooltip. Color is never the only signal.
 - Band limits live in `config/ratings.json` so they can be tuned without code changes.
@@ -166,16 +178,17 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
 
 ### 7.2 Steps
 1. **Detect new run:** read `time_coverage_end` from `erddap/info/wrf_mo/index.csv`. If it equals `meta.json.wrf.coverageEnd` on the `data` branch, skip the WRF fetch. NWS, tides and alerts still run.
-2. **Fetch WRF** with one bounded request in **NetCDF (`.nc`)** format (much smaller than CSV/JSON):
-   - `Uwind,Vwind` over the Maui box lat **20.50–21.10**, lon **−156.72 to −155.95**, time `now−1h` → `last`, stride 1.
-   - `Tair,rain` only at the three spot cells (three small requests, or one small box).
-   - Read with `xarray` + `netCDF4`. Timeout 300 s, 3 retries with exponential backoff.
+2. **Fetch WRF** with small, bounded ERDDAP **`.json`** requests, parsed with the Python standard library (no numpy/xarray needed; measured 2026-11-13: one spot ≈ 2 s / 7 KB, the stride-2 map box ≈ 4 s / 2.4 MB):
+   - Spots: `Uwind,Vwind,Tair,rain` at each spot's cell, from **local midnight HST** → `last` (so "today" shows all 24 hours; past hours come from the model analysis).
+   - Map (M2): `Uwind,Vwind` over the Maui box lat **20.50–21.10**, lon **−156.72 to −155.95**, stride 2.
+   - Timeout 300 s, 3 retries with exponential backoff; HTML proxy-error pages are treated as failures.
 3. **Build spot series** (§7.4) and **map frames** (§7.5).
-4. **NWS:** gridpoint raw forecasts per spot (expand intervals to hourly, km/h → kn); active alerts for `PHZ117,PHZ119,HIZ045,HIZ049`; latest CWF product → split out the PHZ117/PHZ119 sections; observations for the last 6 h from PHOG and the Kihei station, appended to a rolling 7-day verification file.
+4. **NWS:** gridpoint raw forecasts per spot (expand intervals to hourly, km/h → kn); active alerts for `PHZ117,PHZ119,HIZ045,HIZ049`; latest CWF product → split out the PHZ117/PHZ119 sections.
+   **Observations** (implemented in M1, `makani/obs.py`): every run re-reads the last 7 days from Kahului Harbor (CO-OPS) and PHOG (NWS), bins them to hourly values and merges them into `archive/obs/` (§7.6). Re-reading 7 days catches PHOG values that QC fills in late. A failing station is a warning only.
 5. **Tides:** CO-OPS `datagetter` `product=predictions`, `datum=MLLW`, `units=english`, `time_zone=lst_ldt`, `interval=hilo` plus `interval=h` for the curve, covering the forecast span.
-6. **Verification:** pair WRF (at Kanaha's cell) with PHOG observations over the past 7 days → mean bias, MAE (kn), direction error. Shown on an "Accuracy" panel.
-7. **Validate** the output against JSON Schemas (`pipeline/schemas/`). If anything fails, keep the previous files and fail the job loudly; never publish partial data.
-8. **Publish:** commit `data/` to the orphan **`data` branch** with a single amended commit and force-push, so history doesn't grow by ~0.5 MB × 4/day. Then build the web app with that data copied into `public/data/` and deploy with `actions/deploy-pages`.
+6. **Verification:** pair archived forecasts with archived observations (Kahului Harbor for Kanahā/Sprecks, PHOG as a second reference) → mean bias, MAE (kn), direction error, **by lead time** (same day, D-1, D-2, …). Shown on the Accuracy panel and the History page (§8.6).
+7. **Validate** the output (`pipeline/makani/validate.py`: hour count, hourly steps, value ranges, known sectors/sports). If anything fails, keep the previous files and fail the job loudly; never publish partial data.
+8. **Publish:** commit `data/` to the orphan **`data` branch** as a single commit and force-push, so git history doesn't grow by ~0.5 MB × 4/day. The archive files **accumulate** in that commit (each run restores the previous `data` branch first). Safety: the restore step fails the job if the branch exists but can't be fetched, and publishing is refused if the archive would contain fewer files than before. Then build the web app with that data copied into `public/data/` and deploy with `actions/deploy-pages`. Publishing happens whenever the forecast **or** the observations changed (so in practice every run).
 9. **Alerts:** on the 04:00 and 16:00 UTC runs only, run `alerts.py` (§9).
 
 Each source fails on its own. If NWS is down, WRF still publishes (and the reverse); `meta.json` records each source's status and timestamp.
@@ -189,7 +202,9 @@ spots/maui-sunset.json
 map/frames.json      quantized wind grid for all hours
 nws/alerts.json      active advisories (also fetched live client-side)
 nws/marine.json      CWF text for PHZ117, PHZ119
-verification.json    7-day WRF-vs-PHOG pairs + stats
+archive/index.json                 forecast runs + observation months available, per-station status
+archive/forecast/<run>.json        every WRF run as first published (e.g. 2026-11-18T00Z.json)
+archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST month
 ```
 
 ### 7.4 `spots/{id}.json`
@@ -220,13 +235,37 @@ Sectors and sports are computed in the pipeline (one implementation, also used b
 - `{ "lats": [...], "lons": [...], "times": [...], "kn10": [[...]], "dir": [[...]] }`
 - Budget: ≤ 400 KB raw for the whole run (Pages serves it gzipped). If it grows past that, split into per-day files.
 
+### 7.6 Archive formats (implemented in M1)
+**Forecast run** — `archive/forecast/<run>.json`, ~5 KB, one per WRF run (run id = `time_coverage_end` → `2026-11-18T00Z`):
+```jsonc
+{
+  "run": "2026-11-18T00Z", "coverageEnd": "2026-11-18T00:00:00Z",
+  "fetchedAt": "2026-11-14T00:30:00Z",   // when we first saw it; lead time = t − fetchedAt
+  "start": "2026-11-13T00:00:00-10:00", "hours": 111,
+  "spots": { "kanaha": { "kn": [18.7, …], "dir": [74, …] }, "sprecks": {…}, "maui-sunset": {…} }
+}
+```
+Hours before `fetchedAt` were already in the past (model analysis), so they don't count as forecasts. A re-fetch of the same run (`--force`) keeps the original `fetchedAt`.
+
+**Observations** — `archive/obs/<station>/<YYYY-MM>.json`, ~35 KB per station-month:
+```jsonc
+{ "station": "1615680", "source": "coops", "month": "2026-11",
+  "hours": { "2026-11-13T14": { "kn": 14.2, "gust": 20.0, "dir": 71, "n": 10 } } }
+```
+- Hour keys are HST. Each hour is the **centred** bin [H−30 min, H+30 min), matching WRF's instantaneous hourly values (PHOG's 13:54 report → 14:00).
+- `kn` = mean, `gust` = max (null if none reported), `dir` = speed-weighted vector mean (wraps correctly around north), `n` = samples.
+- Merge rule: an hour is replaced only by a bin with at least as many samples, so a partial bin at the edge of a fetch window never overwrites a complete one, while late QC fills and corrections still get in.
+- Sizes: ~2 MB/year for forecasts + ~1 MB/year for observations.
+
+**Backfill:** run the Forecast workflow manually with `obs_days` = e.g. 400 to load past Kahului Harbor data (requests are split into 30-day chunks). PHOG can't be backfilled beyond 7 days.
+
 ---
 
 ## 8. Front end (Svelte + Vite)
 
 ### 8.1 General
 - Svelte 5 + Vite, TypeScript, no UI framework. Hand-written SVG for the map and icons.
-- **Hash routing** (works on GitHub Pages without 404 tricks): `#/`, `#/spot/:id`, `#/alerts`, `#/about`.
+- **Hash routing** (works on GitHub Pages without 404 tricks): `#/`, `#/spot/:id`, `#/history`, `#/alerts`, `#/about`.
 - **Mobile-first**, light/dark following `prefers-color-scheme`, plus a manual toggle.
 - PWA: manifest + service worker (also required for Web Push). Caches the app shell and last data for offline viewing at the beach.
 - Budget: first load ≤ 250 KB gzipped, excluding `frames.json`, which loads after first paint.
@@ -260,7 +299,15 @@ Sectors and sports are computed in the pipeline (one implementation, also used b
 ### 8.5 Alerts page `#/alerts`
 Create or manage alerts (§9). Shows the user's push alerts for this browser. Email alerts are managed through the link in each email.
 
-### 8.6 About `#/about`
+### 8.6 History `#/history` — forecast vs observed
+- Pick a past date (and spot: Kanahā or Sprecks; Maui Sunset shows "no observation station yet").
+- Chart for that day: **observed** wind and gusts (Kahului Harbor, with PHOG as a dashed second line) against the forecasts that were issued **D-0, D-1, D-2…** before, from `archive/forecast/`.
+- Hourly table under the chart: observed kn/gust/dir vs each forecast, with the error.
+- Summary stats over the last 7 / 30 days: bias and MAE by lead time, so riders learn e.g. "the model runs 2 kn light at Kanahā in strong trades".
+- Data loads lazily: `archive/index.json`, then only the months and runs needed for the chosen date.
+- Honest caveats on the page: the stations aren't exactly at the spot (Harbor on the waterfront west of Kanahā, airport inland), and WRF is a 2 km cell value.
+
+### 8.7 About `#/about`
 Data sources and attribution (PacIOOS/UH WRF, NWS, NOAA CO-OPS), the gust estimate explained, model limits (2 km grid, sea breeze/thermal effects at Kihei), how ratings work, privacy note, and disclaimer.
 
 ---
@@ -325,9 +372,8 @@ Makani/
 │  └─ ratings.json              # sport bands, gust factor, color scale
 ├─ pipeline/                    # Python 3.12
 │  ├─ makani/{wrf,nws,tides,sun,ratings,build,alerts,publish}.py
-│  ├─ schemas/*.schema.json
 │  ├─ tests/                    # pytest, with recorded fixtures
-│  └─ requirements.txt          # requests, numpy, xarray, netCDF4, pywebpush, jsonschema
+│  └─ pyproject.toml            # stdlib only in M1; pywebpush added in M6
 ├─ web/                         # Svelte + Vite + TS
 │  ├─ src/{routes,lib,components,assets}/
 │  ├─ public/ (manifest, icons, sw.js)
@@ -375,10 +421,10 @@ Makani/
 
 | # | Deliverable |
 |---|---|
-| M1 | Repo, CI, `config/spots.json`, WRF pipeline → `spots/*.json`, data branch, Pages deploy of a bare hourly table |
+| M1 | Repo, CI, `config/spots.json`, WRF pipeline → `spots/*.json`, data branch, Pages deploy of a bare hourly table, **forecast-run archive + observed-wind archive (Kahului Harbor, PHOG)** so history starts accumulating from day one |
 | M2 | Coastline asset, SVG map with arrows, time slider |
 | M3 | Ratings: sport icons, direction sectors and warnings, estimated gusts, unit toggle, light/dark, mobile layout |
-| M4 | NWS gridpoint, live observations, advisories, marine text, tides, sunrise/sunset, accuracy panel |
+| M4 | NWS gridpoint, live observations, advisories, marine text, tides, sunrise/sunset, accuracy panel, **History page (forecast vs observed, §8.6)**, Harbor history backfill |
 | M5 | Worker + D1, email signup with double opt-in, alert matching, Resend emails |
 | M6 | PWA service worker, Web Push subscribe/send/prune |
 | M7 | Polish: custom icons, performance budget, accessibility pass, About page, launch |
@@ -396,4 +442,4 @@ These were left unanswered in the interview and were set to sensible defaults. C
 3. **Analytics:** none.
 4. **Grid sampling:** one hand-picked offshore water cell per spot (no interpolation or averaging).
 5. **Spot coordinates and direction sectors:** initial estimates, to be checked with local knowledge.
-6. **Data storage:** latest data force-pushed to an orphan `data` branch (no history), not committed to `main`.
+6. **Data storage:** data force-pushed to an orphan `data` branch as one commit (no git history), not committed to `main`. Archive files accumulate inside that commit (§7.6). A periodic backup (e.g. a monthly zip as a GitHub Release asset) can be added if the archive becomes precious.

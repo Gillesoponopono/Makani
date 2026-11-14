@@ -1,0 +1,10 @@
+{
+  "gustFactor": 1.3,
+  "tooLightBelowKn": 10,
+  "sports": [
+    { "id": "foil_wing", "label": "Kite foil & wing foil", "short": "Foil/Wing", "minKn": 10, "maxKn": 20 },
+    { "id": "directional", "label": "Directional / surf kite", "short": "Directional", "minKn": 15, "maxKn": 25 },
+    { "id": "twintip", "label": "Twin tip", "short": "Twin tip", "minKn": 18, "maxKn": 30 },
+    { "id": "expert", "label": "Experts only / small kites", "short": "Expert", "minKn": 30, "maxKn": null }
+  ]
+}

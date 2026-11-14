@@ -1,0 +1,13 @@
+[project]
+name = "makani-pipeline"
+version = "0.1.0"
+description = "Fetches PacIOOS WRF data into static JSON for the Makani site"
+requires-python = ">=3.9"
+dependencies = []  # stdlib only for M1
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

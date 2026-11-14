@@ -1,0 +1,68 @@
+{
+  "timezone": "Pacific/Honolulu",
+  "utcOffsetHours": -10,
+  "observationStations": [
+    {
+      "id": "1615680",
+      "source": "coops",
+      "name": "Kahului Harbor (NOAA)",
+      "lat": 20.8949,
+      "lon": -156.469,
+      "spots": ["kanaha", "sprecks"],
+      "note": "Waterfront anemometer at the tide station, 6-min data, history back to at least 2020"
+    },
+    {
+      "id": "PHOG",
+      "source": "nws",
+      "name": "Kahului Airport (NWS)",
+      "lat": 20.8925,
+      "lon": -156.43694,
+      "spots": ["kanaha", "sprecks"],
+      "note": "ASOS ~1 km inland, so usually reads lower than on the water; the API keeps only ~7 days"
+    }
+  ],
+  "spots": [
+    {
+      "id": "kanaha",
+      "name": "Kanaha (Kite Beach)",
+      "displayName": "Kanahā (Kite Beach)",
+      "beach": { "lat": 20.899, "lon": -156.447 },
+      "wrfCell": { "lat": 20.92, "lon": -156.44 },
+      "nws": { "gridpoint": "HFO/213,126", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
+      "tideStation": "1615680",
+      "sectors": {
+        "good": [[30, 100]],
+        "ok": [[0, 30], [100, 130]],
+        "danger": [[150, 270]]
+      }
+    },
+    {
+      "id": "sprecks",
+      "name": "Spreckelsville",
+      "displayName": "Spreckelsville",
+      "beach": { "lat": 20.907, "lon": -156.41 },
+      "wrfCell": { "lat": 20.938, "lon": -156.4 },
+      "nws": { "gridpoint": "HFO/215,127", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
+      "tideStation": "1615680",
+      "sectors": {
+        "good": [[45, 90]],
+        "ok": [[20, 45], [90, 110]],
+        "danger": [[140, 260]]
+      }
+    },
+    {
+      "id": "maui-sunset",
+      "name": "Maui Sunset (Kihei)",
+      "displayName": "Maui Sunset (Kīhei)",
+      "beach": { "lat": 20.751, "lon": -156.459 },
+      "wrfCell": { "lat": 20.758, "lon": -156.48 },
+      "nws": { "gridpoint": "HFO/213,120", "obsStation": null, "landZone": "HIZ049", "marineZone": "PHZ119" },
+      "tideStation": null,
+      "sectors": {
+        "good": [[340, 30]],
+        "ok": [[300, 340], [30, 50]],
+        "danger": [[50, 160]]
+      }
+    }
+  ]
+}

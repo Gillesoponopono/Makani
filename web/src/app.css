@@ -1,0 +1,114 @@
+:root {
+  --bg: #f6f8fa;
+  --surface: #ffffff;
+  --text: #13222e;
+  --muted: #5b6b78;
+  --border: #d9e1e7;
+  --border-soft: #eaeff3;
+  --accent: #0b6e8a;
+  --night: #eef2f6;
+  --hatch: rgba(19, 34, 46, 0.06);
+
+  --good-fg: #1d7a3e;
+  --warn-bg: #fff4d6;
+  --warn-fg: #8a5a00;
+  --danger-bg: #fde4e1;
+  --danger-fg: #b3261e;
+  --rain-fg: #2563a8;
+
+  --chip-bg: #e7edf2;
+  --chip-fg: #13222e;
+  --sport-fg: #0f2a1c;
+  --sport-foil: #c9ecf5;
+  --sport-dir: #d5f0c8;
+  --sport-tt: #ffe7a8;
+  --sport-exp: #b3261e;
+
+  /* Wind bands (kn): <10, 10-15, 15-20, 20-25, 25-30, 30-35, 35+ */
+  --kn0-bg: #e3e9ee; --kn0-fg: #4a5b68;
+  --kn1-bg: #c8eccf; --kn1-fg: #144d22;
+  --kn2-bg: #7fd38f; --kn2-fg: #0b3516;
+  --kn3-bg: #ffe066; --kn3-fg: #4d3a00;
+  --kn4-bg: #ffad5c; --kn4-fg: #4a2300;
+  --kn5-bg: #f0605a; --kn5-fg: #ffffff;
+  --kn6-bg: #9b4dca; --kn6-fg: #ffffff;
+
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1820;
+    --surface: #13222e;
+    --text: #e6eef3;
+    --muted: #93a6b4;
+    --border: #243846;
+    --border-soft: #1b2c38;
+    --accent: #4cc3e0;
+    --night: #0a131a;
+    --hatch: rgba(230, 238, 243, 0.06);
+
+    --good-fg: #6fdc8c;
+    --warn-bg: #3d2f0a;
+    --warn-fg: #f5c451;
+    --danger-bg: #4a1714;
+    --danger-fg: #ff8a80;
+    --rain-fg: #7ab8ff;
+
+    --chip-bg: #243846;
+    --chip-fg: #e6eef3;
+    --sport-fg: #e6f7ee;
+    --sport-foil: #1d5566;
+    --sport-dir: #2a5a2a;
+    --sport-tt: #6b5313;
+    --sport-exp: #c8352c;
+
+    --kn0-bg: #22313c; --kn0-fg: #a8b8c4;
+    --kn1-bg: #1f4d2c; --kn1-fg: #c9f2d3;
+    --kn2-bg: #2f8044; --kn2-fg: #ffffff;
+    --kn3-bg: #b89400; --kn3-fg: #1a1400;
+    --kn4-bg: #c86a1a; --kn4-fg: #ffffff;
+    --kn5-bg: #c8352c; --kn5-fg: #ffffff;
+    --kn6-bg: #7d3aa8; --kn6-fg: #ffffff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--bg);
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.status {
+  color: var(--muted);
+}
+.status.error {
+  color: var(--danger-fg);
+}
+
+.kn-0 { background: var(--kn0-bg); color: var(--kn0-fg); }
+.kn-1 { background: var(--kn1-bg); color: var(--kn1-fg); }
+.kn-2 { background: var(--kn2-bg); color: var(--kn2-fg); }
+.kn-3 { background: var(--kn3-bg); color: var(--kn3-fg); }
+.kn-4 { background: var(--kn4-bg); color: var(--kn4-fg); }
+.kn-5 { background: var(--kn5-bg); color: var(--kn5-fg); }
+.kn-6 { background: var(--kn6-bg); color: var(--kn6-fg); }

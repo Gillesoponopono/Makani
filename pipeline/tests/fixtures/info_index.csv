@@ -1,0 +1,4 @@
+Row Type,Variable Name,Attribute Name,Data Type,Value
+attribute,NC_GLOBAL,time_coverage_end,String,2026-11-18T00:00:00Z
+attribute,NC_GLOBAL,time_coverage_start,String,2010-05-14T12:00:00Z
+dimension,time,,double,"nValues=142951, evenlySpaced=false, averageSpacing=1h 0m 45s"
