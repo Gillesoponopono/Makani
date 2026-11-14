@@ -1,0 +1,27 @@
+{
+  "source": "web/scripts/build-aerial.mjs",
+  "width": 1536,
+  "height": 1024,
+  "spots": {
+    "kanaha": [
+      620.5,
+      232.7
+    ],
+    "sprecks": [
+      690.2,
+      219.3
+    ],
+    "harbor": [
+      583.5,
+      266.2
+    ],
+    "maui-sunset": [
+      461.1,
+      606
+    ],
+    "keawakapu": [
+      473.2,
+      703.6
+    ]
+  }
+}

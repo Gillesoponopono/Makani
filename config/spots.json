@@ -8,7 +8,7 @@
       "name": "Kahului Harbor (NOAA)",
       "lat": 20.8949,
       "lon": -156.469,
-      "spots": ["kanaha", "sprecks"],
+      "spots": ["kanaha", "sprecks", "harbor"],
       "note": "Waterfront anemometer at the tide station, 6-min data, history back to at least 2020"
     },
     {
@@ -17,9 +17,13 @@
       "name": "Kahului Airport (NWS)",
       "lat": 20.8925,
       "lon": -156.43694,
-      "spots": ["kanaha", "sprecks"],
+      "spots": ["kanaha", "sprecks", "harbor"],
       "note": "ASOS ~1 km inland, so usually reads lower than on the water; the API keeps only ~7 days"
     }
+  ],
+  "tideStations": [
+    { "id": "1615680", "name": "Kahului Harbor", "kind": "harmonic" },
+    { "id": "1615202", "name": "Makena", "kind": "subordinate", "note": "NOAA gives only high/low times here (offsets from Kahului); the curve in between is a cosine fit" }
   ],
   "spots": [
     {
@@ -30,6 +34,7 @@
       "wrfCell": { "lat": 20.92, "lon": -156.44 },
       "nws": { "gridpoint": "HFO/213,126", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
       "tideStation": "1615680",
+      "waves": { "swan": { "lat": 20.905, "lon": -156.445 }, "ww3": { "lat": 20.95, "lon": -156.45 } },
       "sectors": {
         "good": [[30, 100]],
         "ok": [[0, 30], [100, 130]],
@@ -44,10 +49,26 @@
       "wrfCell": { "lat": 20.938, "lon": -156.4 },
       "nws": { "gridpoint": "HFO/215,127", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
       "tideStation": "1615680",
+      "waves": { "swan": { "lat": 20.915, "lon": -156.41 }, "ww3": { "lat": 20.95, "lon": -156.4 } },
       "sectors": {
         "good": [[45, 90]],
         "ok": [[20, 45], [90, 110]],
         "danger": [[140, 260]]
+      }
+    },
+    {
+      "id": "harbor",
+      "name": "Kahului Harbor",
+      "displayName": "Kahului Harbor",
+      "beach": { "lat": 20.8938, "lon": -156.468 },
+      "wrfCell": { "lat": 20.902, "lon": -156.46 },
+      "nws": { "gridpoint": "HFO/212,126", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
+      "tideStation": "1615680",
+      "waves": { "sheltered": true },
+      "sectors": {
+        "good": [[30, 100]],
+        "ok": [[0, 30], [100, 130]],
+        "danger": [[150, 270]]
       }
     },
     {
@@ -57,7 +78,23 @@
       "beach": { "lat": 20.751, "lon": -156.459 },
       "wrfCell": { "lat": 20.758, "lon": -156.48 },
       "nws": { "gridpoint": "HFO/213,120", "obsStation": null, "landZone": "HIZ049", "marineZone": "PHZ119" },
-      "tideStation": null,
+      "tideStation": "1615202",
+      "waves": { "swan": { "lat": 20.75, "lon": -156.465 }, "ww3": { "lat": 20.7, "lon": -156.5 } },
+      "sectors": {
+        "good": [[340, 30]],
+        "ok": [[300, 340], [30, 50]],
+        "danger": [[50, 160]]
+      }
+    },
+    {
+      "id": "keawakapu",
+      "name": "Keawakapu (Kihei)",
+      "displayName": "Keawakapu (Kīhei)",
+      "beach": { "lat": 20.701, "lon": -156.446 },
+      "wrfCell": { "lat": 20.704, "lon": -156.48 },
+      "nws": { "gridpoint": "HFO/213,117", "obsStation": null, "landZone": "HIZ049", "marineZone": "PHZ119" },
+      "tideStation": "1615202",
+      "waves": { "swan": { "lat": 20.7, "lon": -156.45 }, "ww3": { "lat": 20.7, "lon": -156.5 } },
       "sectors": {
         "good": [[340, 30]],
         "ok": [[300, 340], [30, 50]],

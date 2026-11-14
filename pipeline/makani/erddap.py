@@ -1,4 +1,5 @@
-"""Minimal ERDDAP griddap client for the PacIOOS WRF Maui-Oahu dataset (wrf_mo).
+"""Minimal ERDDAP griddap client for PacIOOS: WRF Maui-Oahu wind (wrf_mo) and, via
+`dataset=`, the SWAN / WaveWatch III wave models.
 
 Stdlib only. The server can be slow or return proxy errors, so every request
 has a long timeout and retries with backoff.
@@ -28,13 +29,18 @@ def _axis(start: str, stop: str, stride: int = 1) -> str:
 
 def griddap_url(variables: Sequence[str], time_start: str, lat: tuple[float, float],
                 lon: tuple[float, float], time_end: str = "last", stride: int = 1,
-                fmt: str = "json") -> str:
-    """Build a griddap query. Times are ISO-8601 UTC strings or 'last'."""
+                fmt: str = "json", dataset: str = DATASET, depth: float | None = None) -> str:
+    """Build a griddap query. Times are ISO-8601 UTC strings or 'last'.
+
+    The wave datasets (swan_maui, ww3_hawaii) have a single-valued depth axis
+    between time and latitude, and use 0-360 longitudes.
+    """
     axes = (_axis(time_start, time_end)
+            + (f"[({depth:g})]" if depth is not None else "")
             + _axis(f"{lat[0]:g}", f"{lat[1]:g}", stride)
             + _axis(f"{lon[0]:g}", f"{lon[1]:g}", stride))
     query = ",".join(v + axes for v in variables)
-    return f"{BASE_URL}/griddap/{DATASET}.{fmt}?" + urllib.parse.quote(query, safe="(),:")
+    return f"{BASE_URL}/griddap/{dataset}.{fmt}?" + urllib.parse.quote(query, safe="(),:")
 
 
 def parse_table(raw: bytes) -> list[dict[str, Any]]:
@@ -64,9 +70,10 @@ def coverage_end(fetch: Fetcher = _quick_get) -> str:
 
 
 def point_series(lat: float, lon: float, time_start: str, variables: Sequence[str],
-                 fetch: Fetcher = http_get) -> list[dict[str, Any]]:
+                 fetch: Fetcher = http_get, dataset: str = DATASET,
+                 depth: float | None = None) -> list[dict[str, Any]]:
     """Hourly rows for the grid cell nearest (lat, lon), from time_start to the end of the run."""
-    url = griddap_url(variables, time_start, (lat, lat), (lon, lon))
+    url = griddap_url(variables, time_start, (lat, lat), (lon, lon), dataset=dataset, depth=depth)
     return parse_table(fetch(url))
 
 

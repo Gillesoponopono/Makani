@@ -125,14 +125,14 @@ def test_archives_complete_runs_waits_for_partial_and_never_refetches(tmp_path):
     files = sorted(p.name for p in (tmp_path / "archive" / "forecast").iterdir())
     assert files == ["2026-11-10T00Z.json", "2026-11-11T00Z.json"]
     rec = json.loads((tmp_path / "archive" / "forecast" / "2026-11-11T00Z.json").read_text())
-    assert rec["hours"] == 163 and set(rec["spots"]) == {"kanaha", "sprecks", "maui-sunset"}
-    assert len(fetch.urls) == 1 + 3 * 3  # catalog + 3 runs x 3 spots
+    assert rec["hours"] == 163 and set(rec["spots"]) == {"kanaha", "sprecks", "harbor", "maui-sunset", "keawakapu"}
+    assert len(fetch.urls) == 1 + 3 * len(SPOTS)  # catalog + 3 runs x every spot
 
     # Next pass: archived runs aren't fetched again; the partial one is retried.
     fetch2 = FakeThredds({**runs, utc(2026, 11, 12): range(6, 169)})
     st = thredds.update_forecast_archive(tmp_path, SPOTS, HST, now, days=10, fetch=fetch2, pause=0)
     assert st["added"] == 1
-    assert len(fetch2.urls) == 1 + 3
+    assert len(fetch2.urls) == 1 + len(SPOTS)
 
 
 def test_errors_are_isolated_and_a_failing_server_stops_the_pass(tmp_path):

@@ -14,6 +14,42 @@ export interface Hour {
   sector: Sector
   sports: string[]
   daylight: boolean
+  wave?: Wave | null // missing before schema 3, null when the model has no value
+}
+
+export type WaveType = 'flat' | 'chop' | 'swell' | 'mixed'
+
+export interface WavePart {
+  m: number // significant height, metres
+  per: number // peak period, seconds
+  dir: number | null // coming from, degrees
+}
+
+/** Sea at the spot (pipeline/makani/waves.py): SWAN near the beach, split from WW3 offshore. */
+export interface Wave {
+  m: number
+  per: number | null
+  dir: number | null
+  type: WaveType
+  swell: WavePart | null
+  chop: WavePart | null
+}
+
+export interface TideExtreme {
+  t: string // ISO, HST
+  ft: number // above MLLW
+  type: 'H' | 'L'
+}
+
+/** NOAA tide predictions (pipeline/makani/tides.py), feet above MLLW. */
+export interface Tide {
+  station: string
+  name: string
+  kind: 'harmonic' | 'subordinate'
+  datum: string
+  units: 'ft'
+  curve: { start: string; stepMinutes: number; ft: (number | null)[] }
+  extremes: TideExtreme[]
 }
 
 export interface SunDay {
@@ -31,6 +67,8 @@ export interface SpotDoc {
   sectors: Record<string, [number, number][]>
   hours: Hour[]
   sun: SunDay[]
+  waves?: { status: 'ok' | 'sheltered' | 'error' | 'none'; swanCell?: { lat: number; lon: number }; ww3Cell?: { lat: number; lon: number } | null }
+  tide?: Tide | null
 }
 
 export interface SportBand {
@@ -50,4 +88,6 @@ export interface Meta {
   ratings: { gustFactor: number; tooLightBelowKn: number; sports: SportBand[] }
   spots: { id: string; name: string; displayName: string; beach?: { lat: number; lon: number } }[]
   map?: { file: string; hours: number; grid: [number, number] }
+  waves?: { datasets: string[]; spots: Record<string, string> }
+  tides?: { source: string; stations: Record<string, string> }
 }

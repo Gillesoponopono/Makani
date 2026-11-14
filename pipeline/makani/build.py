@@ -7,6 +7,8 @@ Usage:
 Designed to run hourly as a cheap check:
 1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end;
    the spot JSON is rebuilt only when it changes, i.e. a new run is complete.
+   A rebuild also adds waves (PacIOOS SWAN + WW3, waves.py) and tides (NOAA
+   CO-OPS, tides.py); those are extras and never block the wind.
 2. Forecast archive (THREDDS): when a new run is out (or with --force, or a
    non-default --forecast-days for backfill), every complete run of the last
    N days that isn't archived yet is saved exactly as issued.
@@ -27,13 +29,13 @@ from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 
-from . import SCHEMA_VERSION, archive, erddap, mapframes, obs, thredds
+from . import SCHEMA_VERSION, archive, erddap, mapframes, obs, thredds, tides, waves
 from .config import load_map, load_ratings, load_spots, local_tz
 from .jsonio import read_json, write_json_atomic
 from .net import FetchError
 from .ratings import classify_sector, display_kn, ms_to_kn, sports_for, uv_to_speed_dir
 from .sun import sun_times
-from .validate import validate_meta, validate_spot
+from .validate import validate_meta, validate_spot, validate_extras
 
 WRF_VARIABLES = ("Uwind", "Vwind", "Tair", "rain")
 
@@ -103,6 +105,30 @@ def build_spot(spot: dict[str, Any], rows: list[dict[str, Any]], ratings: dict[s
     }
 
 
+def add_tides(docs: list[dict[str, Any]], spots_cfg: dict[str, Any], tz: tzinfo, out_dir: Path,
+              fetch: erddap.Fetcher) -> dict[str, str]:
+    """Attach each spot's tide block; reuse the published one if NOAA fails (tides
+    are deterministic). Returns a status per station."""
+    by_spot = {s["id"]: s.get("tideStation") for s in spots_cfg["spots"]}
+    wanted = {sid for sid in by_spot.values() if sid}
+    if not wanted or not docs[0]["hours"]:
+        return {}
+    begin = datetime.fromisoformat(docs[0]["hours"][0]["t"]).date()
+    end = datetime.fromisoformat(docs[0]["hours"][-1]["t"]).date()
+    blocks = tides.fetch_blocks(spots_cfg.get("tideStations", []), wanted, begin, end, tz, fetch)
+    status = {sid: "ok" if b else "error" for sid, b in blocks.items()}
+    for doc in docs:
+        sid = by_spot.get(doc["id"])
+        block = blocks.get(sid) if sid else None
+        if sid and block is None:
+            prev = read_json(out_dir / "spots" / f"{doc['id']}.json") or {}
+            if (prev.get("tide") or {}).get("station") == sid:
+                block = prev["tide"]
+                status[sid] = "kept"
+        doc["tide"] = block
+    return status
+
+
 def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
           fetch: erddap.Fetcher = erddap.http_get, config_dir: Path | None = None) -> bool:
     """Fetch and write all files. Returns False when the model run is unchanged."""
@@ -135,6 +161,16 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
     for doc in docs:
         validate_spot(doc, sport_ids)
 
+    # Waves (PacIOOS SWAN + WW3) and tides (NOAA): extras that never block the wind.
+    wave_src = waves.WaveSource(start, fetch)
+    wave_status = {}
+    for spot, doc in zip(spots_cfg["spots"], docs):
+        doc["waves"] = wave_src.apply(spot, doc)
+        wave_status[doc["id"]] = doc["waves"]["status"]
+    tide_status = add_tides(docs, spots_cfg, tz, out_dir, fetch)
+    for doc in docs:
+        validate_extras(doc)
+
     map_cfg = load_map(config_dir)
     map_rows = erddap.box_series(map_cfg["bbox"], map_cfg["gridStride"], start, ("Uwind", "Vwind"), fetch)
     beach0 = spots_cfg["spots"][0]["beach"]
@@ -162,6 +198,8 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
                    "beach": d["beach"]} for d in docs],
         "map": {"file": "map/frames.json", "hours": len(frames["times"]),
                 "grid": [len(frames["lats"]), len(frames["lons"])]},
+        "waves": {"datasets": [waves.SWAN, waves.WW3], "spots": wave_status},
+        "tides": {"source": "NOAA CO-OPS predictions", "stations": tide_status},
     }
     validate_meta(meta, [d["id"] for d in docs])
 

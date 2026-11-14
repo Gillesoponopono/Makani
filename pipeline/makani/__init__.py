@@ -1,4 +1,4 @@
-"""Makani data pipeline: fetches PacIOOS WRF (and later NWS/tides) into static JSON."""
+"""Makani data pipeline: fetches PacIOOS WRF wind and waves and NOAA tides into static JSON."""
 
 USER_AGENT = "Makani-forecast (+https://github.com/Gillesoponopono/Makani)"
-SCHEMA_VERSION = 2  # 2: map frames
+SCHEMA_VERSION = 3  # 2: map frames, 3: tides and waves

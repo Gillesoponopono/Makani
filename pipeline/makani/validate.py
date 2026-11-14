@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 SECTORS = {"good", "ok", "poor", "danger"}
+WAVE_TYPES = {"flat", "chop", "swell", "mixed"}
 MIN_HOURS = 24
 
 
@@ -42,6 +43,23 @@ def validate_spot(doc: dict[str, Any], sport_ids: set[str]) -> None:
         _check(set(h["sports"]) <= sport_ids, f"{sid}: unknown sport in {h['sports']}")
         _check(isinstance(h["daylight"], bool), f"{sid}: daylight must be bool")
     _check(len(doc.get("sun", [])) >= 1, f"{sid}: missing sun times")
+
+
+def validate_extras(doc: dict[str, Any]) -> None:
+    """Waves and tides: optional, but never publish nonsense."""
+    sid = doc.get("id", "?")
+    for h in doc["hours"]:
+        w = h.get("wave")
+        if not w:
+            continue
+        _check(0 < w["m"] < 20, f"{sid}: implausible wave height {w['m']} m at {h['t']}")
+        _check(w["per"] is None or 0 < w["per"] < 30, f"{sid}: bad wave period {w['per']} at {h['t']}")
+        _check(w["type"] in WAVE_TYPES, f"{sid}: bad wave type {w['type']}")
+    tide = doc.get("tide")
+    if tide:
+        _check(len(tide["curve"]["ft"]) >= 24, f"{sid}: tide curve too short")
+        _check(all(v is None or -4 < v < 6 for v in tide["curve"]["ft"]), f"{sid}: implausible tide height")
+        _check(all(e["type"] in ("H", "L") for e in tide["extremes"]), f"{sid}: bad tide extreme type")
 
 
 def validate_meta(meta: dict[str, Any], spot_ids: list[str]) -> None:

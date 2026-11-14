@@ -36,12 +36,45 @@ def box_table(n_hours: int, u: float = -9.5, v: float = -3.5) -> bytes:
                                  "rows": rows}}).encode()
 
 
+def wave_table(n_hours: int, cols: list[str], values: list[float]) -> bytes:
+    rows = [[(START + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ"), 0, 20.9, 203.55, *values]
+            for i in range(n_hours)]
+    return json.dumps({"table": {"columnNames": ["time", "depth", "latitude", "longitude", *cols],
+                                 "rows": rows}}).encode()
+
+
+def tide_json(url: str) -> bytes:
+    """Highs and lows every ~6 h 12 min, or an hourly curve, over the requested days."""
+    q = dict(p.split("=", 1) for p in url.split("?", 1)[1].split("&"))
+    d0 = datetime.strptime(q["begin_date"], "%Y%m%d")
+    d1 = datetime.strptime(q["end_date"], "%Y%m%d") + timedelta(days=1)
+    preds, t, high = [], d0, True
+    step = timedelta(hours=1) if q["interval"] == "h" else timedelta(hours=6, minutes=12)
+    while t < d1:
+        p = {"t": t.strftime("%Y-%m-%d %H:%M"), "v": "2.1" if high else "0.3"}
+        if q["interval"] == "hilo":
+            p["type"] = "H" if high else "L"
+        preds.append(p)
+        t, high = t + step, not high
+    return json.dumps({"predictions": preds}).encode()
+
+
 class FakeFetch:
-    def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, **kw):
+    def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, tides_down=False, **kw):
         self.end, self.n_hours, self.kw, self.urls = end, n_hours, kw, []
+        self.tides_down = tides_down
 
     def __call__(self, url):
         self.urls.append(url)
+        if "tidesandcurrents" in url:
+            if self.tides_down:
+                raise build_mod.FetchError("NOAA down")
+            return tide_json(url)
+        if "/swan_maui." in url:
+            return wave_table(self.n_hours, ["shgt", "pper", "pdir"], [1.2, 14.7, 345])
+        if "/ww3_hawaii." in url:
+            return wave_table(self.n_hours, ["whgt", "wper", "wdir", "shgt", "sper", "sdir"],
+                              [1.5, 6.9, 61, 1.3, 14.9, 340])
         if "/info/" in url:
             return info_csv(self.end)
         if ":2:" in url:  # stride-2 box = map query
@@ -56,7 +89,7 @@ def test_build_writes_spots_and_meta(tmp_path):
     meta = json.loads((tmp_path / "meta.json").read_text())
     assert meta["wrf"]["coverageEnd"] == "2026-11-18T00:00:00Z"
     assert meta["wrf"]["hours"] == 98
-    assert [s["id"] for s in meta["spots"]] == ["kanaha", "sprecks", "maui-sunset"]
+    assert [s["id"] for s in meta["spots"]] == ["kanaha", "sprecks", "harbor", "maui-sunset", "keawakapu"]
     # Query starts at local midnight (10:00Z).
     assert "2026-11-13T10:00:00Z" in fetch.urls[1]
 
@@ -86,6 +119,44 @@ def test_build_writes_spots_and_meta(tmp_path):
     sunset = json.loads((tmp_path / "spots" / "maui-sunset.json").read_text())
     assert sunset["hours"][0]["sector"] == "danger"
     assert sunset["hours"][0]["sports"] == []
+
+
+def test_build_adds_waves_and_tides(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert meta["schemaVersion"] == 3
+    assert meta["tides"]["stations"] == {"1615202": "ok", "1615680": "ok"}
+    assert meta["waves"]["spots"]["harbor"] == "sheltered"
+
+    kanaha = json.loads((tmp_path / "spots" / "kanaha.json").read_text())
+    w = kanaha["hours"][0]["wave"]
+    assert (w["m"], w["per"], w["dir"], w["type"]) == (1.2, 14.7, 345, "mixed")
+    assert kanaha["waves"]["status"] == "ok"
+    tide = kanaha["tide"]
+    assert tide["station"] == "1615680" and tide["kind"] == "harmonic"
+    assert tide["curve"]["start"] == "2026-11-13T00:00:00-10:00"
+    assert len(tide["curve"]["ft"]) == 5 * 24 + 1   # 98 hours from midnight span 5 local days
+    assert {e["type"] for e in tide["extremes"]} == {"H", "L"}
+
+    sunset = json.loads((tmp_path / "spots" / "maui-sunset.json").read_text())
+    assert sunset["tide"]["station"] == "1615202" and sunset["tide"]["kind"] == "subordinate"
+    assert sunset["hours"][0]["wave"]["chop"] is None   # trade-wind chop heads out to sea there
+    assert sunset["hours"][0]["wave"]["type"] == "swell"
+
+    harbor = json.loads((tmp_path / "spots" / "harbor.json").read_text())
+    assert harbor["waves"] == {"status": "sheltered"}
+    assert harbor["hours"][0]["wave"] is None
+
+
+def test_tides_down_keeps_the_published_tides_and_still_publishes(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    before = json.loads((tmp_path / "spots" / "kanaha.json").read_text())["tide"]
+    assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(end="2026-11-19T00:00:00Z", tides_down=True))
+    after = json.loads((tmp_path / "spots" / "kanaha.json").read_text())
+    assert after["tide"] == before
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert meta["wrf"]["coverageEnd"] == "2026-11-19T00:00:00Z"
+    assert meta["tides"]["stations"]["1615680"] == "kept"
 
 
 def test_unchanged_run_is_skipped_and_force_rebuilds(tmp_path):

@@ -11,7 +11,7 @@ export function todayKey(now = Date.now()): string {
   return currentHourKey(now).slice(0, 10)
 }
 
-function addDays(dateKey: string, n: number): string {
+export function addDays(dateKey: string, n: number): string {
   const d = new Date(`${dateKey}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + n)
   return d.toISOString().slice(0, 10)
@@ -60,8 +60,34 @@ export function clockLabel(hhmm: string): string {
 }
 
 const POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+const WORDS = [
+  'North', 'North-northeast', 'Northeast', 'East-northeast', 'East', 'East-southeast', 'Southeast', 'South-southeast',
+  'South', 'South-southwest', 'Southwest', 'West-southwest', 'West', 'West-northwest', 'Northwest', 'North-northwest',
+]
+const point = (deg: number) => Math.floor(((deg % 360) + 360) % 360 / 22.5 + 0.5) % 16
 export function compass(deg: number): string {
-  return POINTS[Math.floor(((deg % 360) + 360) % 360 / 22.5 + 0.5) % 16]
+  return POINTS[point(deg)]
+}
+/** "East-northeast" for 68°. */
+export function compassWords(deg: number): string {
+  return WORDS[point(deg)]
+}
+
+/** "Sat, Nov 14" */
+export function dateLong(dateKey: string): string {
+  const d = new Date(`${dateKey}T00:00:00Z`)
+  return `${WEEKDAY[d.getUTCDay()]}, ${MONTH[d.getUTCMonth()]} ${d.getUTCDate()}`
+}
+
+/** "Saturday" */
+export function weekdayLong(dateKey: string): string {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${dateKey}T00:00:00Z`).getUTCDay()]
+}
+
+/** Fractional HST hour now, e.g. 14.5 at 2:30 PM. */
+export function nowHoursHst(now = Date.now()): number {
+  const d = new Date(now + HST_OFFSET_MS)
+  return d.getUTCHours() + d.getUTCMinutes() / 60
 }
 
 /** Wind colour band index used by .kn-0 … .kn-6 (same thresholds as the map legend, §8.4). */
@@ -70,8 +96,6 @@ export function knBand(kn: number): number {
   const i = edges.findIndex((e) => kn < e)
   return i === -1 ? edges.length : i
 }
-
-export const cToF = (c: number) => (c * 9) / 5 + 32
 
 export function timeAgo(iso: string, now = Date.now()): string {
   const mins = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000))
