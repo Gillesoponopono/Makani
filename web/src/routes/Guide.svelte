@@ -29,20 +29,25 @@
       <dd>The grey line is an estimate: wind × {meta.ratings.gustFactor}. The model doesn't forecast gusts.</dd>
       <dt>Adjusted</dt>
       <dd>
-        The dashed line is the model corrected with 14 months of forecasts compared with what nearby anemometers
-        measured: the model tends to announce too much wind near Kahului, more so when it announces a lot. It is fitted
-        separately for trade winds and other directions, by day and by night. The anemometers aren't on the beach,
-        which may get more wind, so read it as "what the anemometers would show".
+        The dashed line is the model corrected with 14 months of forecasts compared with what nearby weather stations
+        measured: the model tends to announce too much wind, more so when it announces a lot. It is fitted separately
+        for trade winds and other directions, by day and by night. The stations aren't on the beach, which may get more
+        wind, so read it as "what the station would show".
         {#if adjusted.length}
           <ul class="figures">
             {#each adjusted as d (d.id)}
+              {@const a = d.adjusted!}
               <li>
-                <strong>{d.displayName}</strong>: typical miss in kiting hours {d.adjusted!.maeRaw?.toFixed(1)} →
-                {d.adjusted!.maeAdj?.toFixed(1)} kn, against the {d.adjusted!.reference}.
+                <strong>{d.displayName}</strong>:
+                {#if a.transferredFrom}
+                  no station nearby, so it uses the correction fitted for
+                  {docs.find((x) => x.id === a.transferredFrom)?.displayName ?? a.transferredFrom}. An estimate, not checked.
+                {:else}
+                  typical miss in kiting hours {a.maeRaw?.toFixed(1)} → {a.maeAdj?.toFixed(1)} kn, against the {a.reference}.
+                {/if}
               </li>
             {/each}
           </ul>
-          No adjusted line where no anemometer is close enough (Hoʻokipa, Kīhei).
         {/if}
       </dd>
       <dt>Direction</dt>

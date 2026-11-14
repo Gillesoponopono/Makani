@@ -77,7 +77,13 @@ export interface SpotDoc {
   tide?: Tide | null
   water?: { status: 'ok' | 'error' | 'none'; cell?: { lat: number; lon: number } }
   /** Where the adjusted forecast comes from; null for spots without a nearby anemometer. */
-  adjusted?: { reference: string; fitted: string | null; maeRaw: number | null; maeAdj: number | null } | null
+  adjusted?: {
+    reference: string
+    fitted: string | null
+    maeRaw: number | null // typical miss in kiting hours, before / after, on months the fit didn't see
+    maeAdj: number | null
+    transferredFrom?: string | null // no anemometer here: a neighbour's correction, not checked
+  } | null
 }
 
 export interface SportBand {

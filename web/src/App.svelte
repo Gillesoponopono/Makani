@@ -5,7 +5,7 @@
   import SpotDays from './routes/SpotDays.svelte'
   import Guide from './routes/Guide.svelte'
   import { loadMeta, loadSpot } from './lib/data'
-  import { addDays, ageHours, dateLong, groupByDay, nowHoursHst, timeAgo, todayKey } from './lib/format'
+  import { addDays, ageHours, groupByDay, nowHoursHst, todayKey } from './lib/format'
   import { GUIDE_HASH, parseRoute, routeHash, type View } from './lib/route'
   import { loadPrefs, savePrefs, type Prefs, type TempUnit, type WindUnit } from './lib/units'
   import type { Meta, SpotDoc } from './lib/types'
@@ -170,9 +170,6 @@
       />
     {/if}
 
-    {#if !route.page}
-      <p class="run">PacIOOS WRF model run through {dateLong(meta.wrf.end.slice(0, 10))} · updated {timeAgo(meta.generatedAt)}</p>
-    {/if}
   </main>
 
   <nav class="tabbar" aria-label="Forecast day">
@@ -343,11 +340,6 @@
   .bad {
     background: var(--danger-bg);
     color: var(--danger);
-  }
-  .run {
-    margin: 18px 0 0;
-    color: var(--faint);
-    font-size: 0.8rem;
   }
   .tabbar {
     display: none;

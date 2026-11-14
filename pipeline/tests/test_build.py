@@ -236,4 +236,7 @@ def test_build_adds_the_adjusted_wind_where_calibrated(tmp_path):
     h = kanaha["hours"][14]
     assert 0 < h["wrf"]["knAdj"] < h["wrf"]["kn"]          # the model reads high near Kahului
     hookipa = json.loads((tmp_path / "spots" / "hookipa.json").read_text())
-    assert hookipa["adjusted"] is None and "knAdj" not in hookipa["hours"][14]["wrf"]
+    assert hookipa["adjusted"]["transferredFrom"] == "sprecks"     # no anemometer: Sprecks' correction
+    assert hookipa["adjusted"]["maeAdj"] is None and hookipa["hours"][14]["wrf"]["knAdj"] > 0
+    sunset = json.loads((tmp_path / "spots" / "maui-sunset.json").read_text())
+    assert sunset["adjusted"]["reference"].startswith("Kealia Pond")

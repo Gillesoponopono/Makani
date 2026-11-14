@@ -7,7 +7,8 @@ direction (30-100°) or not, day (7 AM-6 PM) or night.
 
 Each hour of a calibrated spot gets `wrf.knAdj`; the document gets an
 `adjusted` block (reference, typical miss before/after on the test period).
-Spots without a calibration (no anemometer close enough) get neither.
+Spots without an anemometer can carry a neighbour's fit ("transferredFrom"):
+they get the curve, with no before/after figures since nothing checks it.
 """
 
 from __future__ import annotations
@@ -36,10 +37,11 @@ def apply(cal: dict[str, Any] | None, doc: dict[str, Any]) -> None:
     for h in doc["hours"]:
         hour = datetime.fromisoformat(h["t"]).hour  # timestamps are already local (HST)
         h["wrf"]["knAdj"] = adjusted_kn(spot, h["wrf"]["kn"], h["wrf"]["dir"], hour)
-    t = spot.get("test", {})
+    t = spot.get("test") or {}
     doc["adjusted"] = {
         "reference": spot["reference"],
         "fitted": cal.get("generated"),
         "maeRaw": t.get("maeRawDay"),  # kiting hours, on months the fit didn't see
         "maeAdj": t.get("maeAdjDay"),
+        "transferredFrom": spot.get("transferredFrom"),
     }

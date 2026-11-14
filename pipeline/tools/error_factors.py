@@ -145,9 +145,8 @@ def forecasts(arch: Path, work: Path) -> dict[str, list[tuple[str, float, float,
         run = json.load(open(f))
         init = datetime.fromisoformat(run["init"].replace("Z", "+00:00"))
         start = datetime.fromisoformat(run["start"])
-        for sid in ("kanaha", "sprecks"):
-            sp = run["spots"].get(sid)
-            for i, (kn, d) in enumerate(zip(sp["kn"], sp["dir"]) if sp else []):
+        for sid, sp in run["spots"].items():  # every archived spot (Kanahā, Sprecks, Maui Sunset, ...)
+            for i, (kn, d) in enumerate(zip(sp["kn"], sp["dir"])):
                 if kn is not None:
                     t = start + timedelta(hours=i)
                     out[sid].append((t.astimezone(HST).strftime(KEY), (t - init).total_seconds() / 3600, kn, d))

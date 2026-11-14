@@ -111,6 +111,93 @@
           "n": 10289
         }
       }
+    },
+    "maui-sunset": {
+      "reference": "Kealia Pond weather station (USFWS refuge, 5 km north, by a pond inland of the beach)",
+      "pairs": 26405,
+      "test": {
+        "from": "2026-07-01",
+        "maeRaw": 7.79,
+        "maeAdj": 2.61,
+        "maeRawDay": 6.6,
+        "maeAdjDay": 3.04,
+        "biasRaw": 6.57,
+        "biasAdj": -0.68
+      },
+      "groups": {
+        "other-day": {
+          "a": 4.19,
+          "b": 0.351,
+          "n": 11606
+        },
+        "other-night": {
+          "a": 0.09,
+          "b": 0.412,
+          "n": 12482
+        },
+        "trade-day": {
+          "a": 4.65,
+          "b": 0.443,
+          "n": 998
+        },
+        "trade-night": {
+          "a": 0.45,
+          "b": 0.571,
+          "n": 1319
+        }
+      }
+    },
+    "hookipa": {
+      "reference": "no anemometer here: the Sprecks correction, transferred",
+      "transferredFrom": "sprecks",
+      "groups": {
+        "other-day": {
+          "a": 3.33,
+          "b": 0.657,
+          "n": 1530
+        },
+        "other-night": {
+          "a": 2.22,
+          "b": 0.539,
+          "n": 2373
+        },
+        "trade-day": {
+          "a": 3.17,
+          "b": 0.542,
+          "n": 11220
+        },
+        "trade-night": {
+          "a": 2.59,
+          "b": 0.439,
+          "n": 11451
+        }
+      }
+    },
+    "keawakapu": {
+      "reference": "no anemometer here: the Maui Sunset correction, transferred",
+      "transferredFrom": "maui-sunset",
+      "groups": {
+        "other-day": {
+          "a": 4.19,
+          "b": 0.351,
+          "n": 11606
+        },
+        "other-night": {
+          "a": 0.09,
+          "b": 0.412,
+          "n": 12482
+        },
+        "trade-day": {
+          "a": 4.65,
+          "b": 0.443,
+          "n": 998
+        },
+        "trade-night": {
+          "a": 0.45,
+          "b": 0.571,
+          "n": 1319
+        }
+      }
     }
   }
 }

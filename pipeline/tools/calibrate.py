@@ -13,7 +13,12 @@ Reference wind:
   beach, so the adjusted curve says "what the anemometers would show", not
   the beach itself.
 - Kahului Harbor: the harbor anemometer, at the spot.
-- Hoʻokipa and the Kīhei spots: no anemometer near enough, no adjustment.
+- Maui Sunset: the Kealia Pond weather station (USFWS refuge, HADS KPDH1,
+  hourly, mph), 5 km north at the top of Kīhei, from the Iowa Environmental
+  Mesonet HADS archive.
+- Hoʻokipa and Keawakapu have no anemometer: they get their nearest fitted
+  neighbour's correction (Sprecks, Maui Sunset), marked "transferred" and not
+  checked.
 
 Checked on a time split (fit before 2026-07, test after) before fitting on
 everything. Writes config/calibration.json, which build.py applies (wrf.knAdj).
@@ -25,12 +30,14 @@ everything. Writes config/calibration.json, which build.py applies (wrf.knAdj).
 from __future__ import annotations
 
 import argparse
+import csv
 import glob
+import urllib.request
 import json
 import os
 import sys
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -41,6 +48,29 @@ ROOT = Path(__file__).resolve().parents[2]
 SPLIT = "2026-07-01"
 LEADS = (0, 96)  # hours: what the site shows
 B_RANGE = (0.2, 1.5)
+HST = timezone(timedelta(hours=-10))
+MPH_TO_KN = 0.868976
+KEALIA = ("https://mesonet.agron.iastate.edu/cgi-bin/request/hads.py?network=HI_DCP&stations=KPDH1"
+          "&sts={start}T00:00Z&ets={end}T00:00Z&what=txt&delim=comma")
+# Spots without an anemometer: (gets the fit of, label)
+TRANSFERS = {"hookipa": "sprecks", "keawakapu": "maui-sunset"}
+
+
+def fetch_kealia(work: Path, first: date, last: date) -> dict[str, dict]:
+    """Kealia Pond hourly wind by HST hour key (kn), from the IEM HADS archive (cached)."""
+    path = work / "kealia_hads.csv"
+    if not path.exists():
+        print("downloading Kealia Pond history (Iowa Environmental Mesonet HADS) ...", flush=True)
+        url = KEALIA.format(start=first.isoformat(), end=(last + timedelta(days=1)).isoformat())
+        path.write_bytes(urllib.request.urlopen(url, timeout=240).read())
+    out = {}
+    for r in csv.DictReader(open(path)):
+        if not r.get("USIRGZZ"):
+            continue
+        t = datetime.strptime(r["utc_valid"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        t = (t + timedelta(minutes=30)).replace(minute=0, second=0)  # :20 reading -> nearest hour
+        out[t.astimezone(HST).strftime("%Y-%m-%dT%H")] = {"kn": float(r["USIRGZZ"]) * MPH_TO_KN}
+    return out
 
 
 def fit(rows):
@@ -84,6 +114,7 @@ def main():
                    for f in glob.glob(str(arch / "forecast" / "*.json")))
     fetch_cells(work, inits)
     harbor, airport = load_obs(arch, fetch_airport(work, inits[0].date(), date.today()))
+    kealia = fetch_kealia(work, inits[0].date(), date.today())
     fc = forecasts(arch, work)
 
     def both(k):
@@ -96,6 +127,8 @@ def main():
         "sprecks": (fc["sprecks"], both, "mean of the Kahului Harbor (NOAA 1615680) and Kahului Airport (PHOG) anemometers"),
         "harbor": (fc["harbor-cell"], lambda k: harbor[k]["kn"] if k in harbor else None,
                    "Kahului Harbor anemometer (NOAA 1615680)"),
+        "maui-sunset": (fc["maui-sunset"], lambda k: kealia[k]["kn"] if k in kealia else None,
+                        "Kealia Pond weather station (USFWS refuge, 5 km north, by a pond inland of the beach)"),
     }
     out = {"generated": date.today().isoformat(), "tool": "pipeline/tools/calibrate.py",
            "model": "measured = a + b x forecast, per group (trade 30-100° or other) x (day 7-18 h or night)",
@@ -124,6 +157,14 @@ def main():
               f"(9-5: {t['maeRawDay']:.1f} -> {t['maeAdjDay']:.1f}), bias {t['biasRaw']:+.1f} -> {t['biasAdj']:+.1f}")
         for g, f in fits.items():
             print(f"         {g:12s} measured = {f['a']:+.2f} + {f['b']:.3f} x forecast  (n={f['n']})")
+    names = {"sprecks": "Sprecks", "maui-sunset": "Maui Sunset"}
+    for sid, src in TRANSFERS.items():
+        out["spots"][sid] = {
+            "reference": f"no anemometer here: the {names[src]} correction, transferred",
+            "transferredFrom": src,
+            "groups": out["spots"][src]["groups"],
+        }
+        print(f"{sid:8s} gets {src}'s fit (no anemometer)")
     args.out.write_text(json.dumps(out, indent=2) + "\n")
     print(f"wrote {args.out.relative_to(ROOT) if args.out.is_relative_to(ROOT) else args.out}")
 
