@@ -60,7 +60,8 @@
 <footer class="site-foot">
   <p>
     Model data: <a href="https://www.pacioos.hawaii.edu/weather/model-wind-maui/">PacIOOS WRF Maui-Oahu</a>
-    (University of Hawaiʻi, Yi-Leng Chen), funded by NOAA/IOOS.
+    (University of Hawaiʻi, Yi-Leng Chen), funded by NOAA/IOOS. Coastline: US Census Bureau, via the
+    <a href="https://geoportal.hawaii.gov/">Hawaiʻi Statewide GIS Program</a>.
   </p>
   <p>
     Forecasts can be wrong. This site doesn't replace checking conditions on the beach, local knowledge or

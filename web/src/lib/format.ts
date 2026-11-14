@@ -25,6 +25,11 @@ export function dateLabel(dateKey: string): string {
   return `${WEEKDAY[d.getUTCDay()]} ${MONTH[d.getUTCMonth()]} ${d.getUTCDate()}`
 }
 
+/** "Fri" — short enough for slider ticks on a phone. */
+export function weekdayShort(dateKey: string): string {
+  return WEEKDAY[new Date(`${dateKey}T00:00:00Z`).getUTCDay()]
+}
+
 export function dayName(dateKey: string, today = todayKey()): string {
   if (dateKey === today) return 'Today'
   if (dateKey === addDays(today, 1)) return 'Tomorrow'

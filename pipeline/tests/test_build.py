@@ -24,6 +24,18 @@ def table(n_hours: int, u: float = -9.5, v: float = -3.5) -> bytes:
         "rows": rows}}).encode()
 
 
+def box_table(n_hours: int, u: float = -9.5, v: float = -3.5) -> bytes:
+    """Stride-2 Maui box: 17 lats x 20 lons, like the real map query."""
+    lats = [round(20.506 + 0.036 * i, 3) for i in range(17)]
+    lons = [round(-156.72 + 0.04 * j, 2) for j in range(20)]
+    rows = []
+    for i in range(n_hours):
+        t = (START + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows += [[t, la, lo, u, v] for la in lats for lo in lons]
+    return json.dumps({"table": {"columnNames": ["time", "latitude", "longitude", "Uwind", "Vwind"],
+                                 "rows": rows}}).encode()
+
+
 class FakeFetch:
     def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, **kw):
         self.end, self.n_hours, self.kw, self.urls = end, n_hours, kw, []
@@ -32,6 +44,8 @@ class FakeFetch:
         self.urls.append(url)
         if "/info/" in url:
             return info_csv(self.end)
+        if ":2:" in url:  # stride-2 box = map query
+            return box_table(self.n_hours, **self.kw)
         return table(self.n_hours, **self.kw)
 
 
@@ -59,6 +73,14 @@ def test_build_writes_spots_and_meta(tmp_path):
     assert kanaha["hours"][12]["daylight"] is True     # noon
     assert kanaha["hours"][5]["wrf"]["rainMmH"] == pytest.approx(0.36)
     assert kanaha["sun"][0]["date"] == "2026-11-13"
+
+    frames = json.loads((tmp_path / "map" / "frames.json").read_text())
+    assert (len(frames["lats"]), len(frames["lons"])) == (17, 20)
+    assert len(frames["times"]) == len(frames["kn10"]) == 98
+    assert frames["times"][0] == "2026-11-13T00:00:00-10:00"
+    assert frames["kn10"][0][0] == round(h0["wrf"]["kn"] * 10)
+    assert frames["daylight"][0] is False and frames["daylight"][12] is True
+    assert meta["map"] == {"file": "map/frames.json", "hours": 98, "grid": [17, 20]}
 
     # ENE trades are offshore at Kihei: no sports, danger sector.
     sunset = json.loads((tmp_path / "spots" / "maui-sunset.json").read_text())

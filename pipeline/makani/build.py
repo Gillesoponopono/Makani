@@ -27,8 +27,8 @@ from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 
-from . import SCHEMA_VERSION, archive, erddap, obs, thredds
-from .config import load_ratings, load_spots, local_tz
+from . import SCHEMA_VERSION, archive, erddap, mapframes, obs, thredds
+from .config import load_map, load_ratings, load_spots, local_tz
 from .jsonio import read_json, write_json_atomic
 from .net import FetchError
 from .ratings import classify_sector, display_kn, ms_to_kn, sports_for, uv_to_speed_dir
@@ -135,6 +135,14 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
     for doc in docs:
         validate_spot(doc, sport_ids)
 
+    map_cfg = load_map(config_dir)
+    map_rows = erddap.box_series(map_cfg["bbox"], map_cfg["gridStride"], start, ("Uwind", "Vwind"), fetch)
+    beach0 = spots_cfg["spots"][0]["beach"]
+    frames = mapframes.build_frames(map_rows, map_cfg["bbox"], map_cfg["gridStride"], tz,
+                                    (beach0["lat"], beach0["lon"]))
+    mapframes.validate_frames(frames)
+    print(f"map: {len(frames['lats'])}x{len(frames['lons'])} grid, {len(frames['times'])} hours")
+
     hours0 = docs[0]["hours"]
     meta = {
         "schemaVersion": SCHEMA_VERSION,
@@ -150,13 +158,17 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
             "status": "ok",
         },
         "ratings": ratings,
-        "spots": [{"id": d["id"], "name": d["name"], "displayName": d["displayName"]} for d in docs],
+        "spots": [{"id": d["id"], "name": d["name"], "displayName": d["displayName"],
+                   "beach": d["beach"]} for d in docs],
+        "map": {"file": "map/frames.json", "hours": len(frames["times"]),
+                "grid": [len(frames["lats"]), len(frames["lons"])]},
     }
     validate_meta(meta, [d["id"] for d in docs])
 
-    # Spot files first, meta last, so meta never references data that isn't there.
+    # Data files first, meta last, so meta never references data that isn't there.
     for doc in docs:
         write_json_atomic(out_dir / "spots" / f"{doc['id']}.json", doc)
+    write_json_atomic(out_dir / "map" / "frames.json", frames)
     write_json_atomic(out_dir / "meta.json", meta)
     print(f"Wrote {len(docs)} spots, {meta['wrf']['hours']} hours, run ends {cov_end}.")
     return True

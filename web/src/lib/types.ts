@@ -48,5 +48,6 @@ export interface Meta {
   utcOffsetHours: number
   wrf: { dataset: string; coverageEnd: string; start: string; end: string; hours: number; status: string }
   ratings: { gustFactor: number; tooLightBelowKn: number; sports: SportBand[] }
-  spots: { id: string; name: string; displayName: string }[]
+  spots: { id: string; name: string; displayName: string; beach?: { lat: number; lon: number } }[]
+  map?: { file: string; hours: number; grid: [number, number] }
 }

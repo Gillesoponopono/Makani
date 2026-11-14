@@ -1,0 +1,10 @@
+{
+  "bbox": { "latMin": 20.5, "latMax": 21.1, "lonMin": -156.72, "lonMax": -155.95 },
+  "gridStride": 2,
+  "svgWidth": 1000,
+  "coastline": {
+    "source": "US Census Bureau 2020 county boundaries (Maui County), via Hawaii Statewide GIS Program",
+    "url": "https://geodata.hawaii.gov/arcgis/rest/services/Census/MapServer/29/query",
+    "generalizeDeg": 0.0004
+  }
+}

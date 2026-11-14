@@ -1,3 +1,4 @@
+import type { Frames } from './map'
 import type { Meta, SpotDoc } from './types'
 
 async function getJson<T>(path: string): Promise<T> {
@@ -21,4 +22,12 @@ export function loadSpot(id: string): Promise<SpotDoc> {
     spotCache.set(id, p)
   }
   return p
+}
+
+let framesPromise: Promise<Frames> | null = null
+
+/** Wind grid for the map (~90 KB gzipped); loaded after the page has rendered. */
+export function loadFrames(): Promise<Frames> {
+  framesPromise ??= getJson<Frames>('data/map/frames.json')
+  return framesPromise
 }

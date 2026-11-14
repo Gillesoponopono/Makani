@@ -1,6 +1,7 @@
 <script lang="ts">
   import Arrow from '../components/Arrow.svelte'
   import SportChips from '../components/SportChips.svelte'
+  import WindMap from '../components/WindMap.svelte'
   import { loadSpot } from '../lib/data'
   import { bestWindow, compass, currentHourKey, dayName, groupByDay, knBand, todayKey, windowLabel } from '../lib/format'
   import type { Meta, SpotDoc } from '../lib/types'
@@ -52,6 +53,7 @@
     {/each}
   </div>
   <p class="hint">Best window = longest daylight stretch suited to at least one sport, with a safe wind direction. Tap a spot for the hourly forecast.</p>
+  <WindMap {docs} />
 {:catch err}
   <p class="status error">Couldn't load forecast data ({err.message}).</p>
 {/await}

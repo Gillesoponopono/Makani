@@ -233,10 +233,12 @@ archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST 
 Sectors and sports are computed in the pipeline (one implementation, also used by alerts). The front end only displays them.
 
 ### 7.5 `map/frames.json`
-- Grid stride 2 (≈ 4 km) over the Maui box → about 15 × 20 ≈ 300 arrows per hour.
-- Quantized: speed as integer tenths of a knot, direction as integer degrees; flat arrays per hour.
-- `{ "lats": [...], "lons": [...], "times": [...], "kn10": [[...]], "dir": [[...]] }`
-- Budget: ≤ 400 KB raw for the whole run (Pages serves it gzipped). If it grows past that, split into per-day files.
+Implemented in M2 (`makani/mapframes.py`), box and stride in `config/map.json`.
+- Grid stride 2 (≈ 4 km) over the Maui box lat 20.5–21.1, lon −156.72 to −155.95 → **17 × 20 = 340 points** per hour, same hours as the spot files (local midnight → end of run).
+- Quantized: speed as integer tenths of a knot, direction as integer degrees ("from"); `null` where missing.
+- `{ "bbox", "stride", "lats": [...], "lons": [...], "times": [HST...], "daylight": [bool...], "kn10": [[...]], "dir": [[...]] }`; each frame is row-major (lat index × len(lons) + lon index), lats/lons ascending. `daylight` is at Kahului, for the slider's night shading.
+- Measured 2026-11-13: 111 hours = **269 KB raw, 89 KB gzipped** (budget ≤ 400 KB raw; split per day if it grows past that).
+- Validated before publishing (shape, hourly steps, ≥ 90 % filled, plausible speeds). `meta.json` gets `"map": {"file", "hours", "grid"}`; schema version 2.
 
 ### 7.6 Archive formats (implemented in M1)
 **Forecast run** — `archive/forecast/<run>.json`, ~4 KB, one per WRF run, fetched from THREDDS exactly as issued (run id = init time):
@@ -297,12 +299,13 @@ Sectors and sports are computed in the pipeline (one implementation, also used b
 - **Accuracy** panel: WRF vs observed over the last 7 days (bias, MAE) and a small chart.
 
 ### 8.4 SVG map
-- Extent: Maui island (lat 20.55–21.05, lon −156.72 to −155.95), equirectangular projection with cos(lat) x-scaling (fine for this small area).
-- Layers: ocean background → optional speed-colored heat cells → coastline (simplified path, ~20–40 KB) → wind arrows (stride 2), sized and colored by knots → spot markers with a live knots label → legend.
+Implemented in M2 (`web/src/components/WindMap.svelte`, geometry in `web/src/lib/map.ts`).
+- Extent: the `config/map.json` box (Maui + Kahoʻolawe), viewBox 1000 × 834, equirectangular projection with cos(mid-lat) x-scaling (fine for this small area). The coastline script and the site use the same projection constants.
+- Layers: ocean → speed-coloured heat cells (water only, translucent) → land → wind arrows (stride 2), length and colour by knots, **arrows over land faded** (point-in-polygon against the coastline) → spot markers → spot labels as **HTML overlays** (constant text size on any screen; side per spot so they don't clip on phones) showing the spot's knots for the selected hour and ⚠ when offshore.
 - Color scale in knots (same as the tables): < 10 grey-blue, 10–15 green, 15–20 bright green, 20–25 yellow, 25–30 orange, 30–35 red, > 35 purple. Must stay legible in light and dark themes.
-- **Time slider:** scrub through all hours, play/pause (1 h per 400 ms), day ticks, and night shading on the slider track. Defaults to the next full hour.
-- Tap or hover on an arrow shows "18 kn from ENE (68°)". Tapping a spot marker opens the spot page.
-- Coastline build: download source → `mapshaper` simplify → GeoJSON → project to an SVG path at build time (`scripts/build-coast`). The output is committed under `web/src/assets/`.
+- **Time slider:** scrub through all hours, ‹ / › one hour, play/pause (1 h per 400 ms, stops at the end), weekday ticks, night shading on the slider track. Defaults to the current hour. The frame grid (~90 KB gz) loads after first paint.
+- **Read a value:** tap anywhere (or focus the map and use the arrow keys: `role="application"`) → "18 kn from ENE (68°) at 20.92°N 156.44°W", with a dashed ring on the grid point. Tapping a spot label opens the spot page.
+- **Coastline:** `node web/scripts/build-coast.mjs` downloads the Maui County polygon (US Census 2020 county boundaries, public domain, from the Hawaiʻi Statewide GIS Program ArcGIS service, server-side generalised to 0.0004° ≈ 40 m), clips it to the box (Sutherland–Hodgman), drops specks, projects it and writes `web/src/assets/maui-coast.json` (2 rings: Maui 1,170 points, Kahoʻolawe 244; 35 KB). Run once; the output is committed. Credited in the footer.
 
 ### 8.5 Alerts page `#/alerts`
 Create or manage alerts (§9). Shows the user's push alerts for this browser. Email alerts are managed through the link in each email.
@@ -377,7 +380,8 @@ Makani/
 ├─ LICENSE                      # MIT (code); data keeps its own terms
 ├─ config/
 │  ├─ spots.json                # spots, cells, sectors, stations, zones
-│  └─ ratings.json              # sport bands, gust factor, color scale
+│  ├─ ratings.json              # sport bands, gust factor
+│  └─ map.json                  # map box, grid stride, coastline source
 ├─ pipeline/                    # Python 3.12
 │  ├─ makani/{wrf,nws,tides,sun,ratings,build,alerts,publish}.py
 │  ├─ tests/                    # pytest, with recorded fixtures
@@ -385,6 +389,7 @@ Makani/
 ├─ web/                         # Svelte + Vite + TS
 │  ├─ src/{routes,lib,components,assets}/
 │  ├─ public/ (manifest, icons, sw.js)
+│  ├─ src/assets/maui-coast.json   # generated coastline (committed)
 │  └─ scripts/build-coast.mjs
 ├─ worker/                      # Cloudflare Worker + D1 (TS, wrangler)
 │  ├─ src/  migrations/  test/
@@ -430,7 +435,7 @@ Makani/
 | # | Deliverable |
 |---|---|
 | M1 | Repo, CI, `config/spots.json`, WRF pipeline → `spots/*.json`, data branch, Pages deploy of a bare hourly table, **forecast archive (every THREDDS run, backfilled a year) + observed-wind archive (Kahului Harbor backfilled, PHOG)**, hourly light check |
-| M2 | Coastline asset, SVG map with arrows, time slider |
+| M2 | Coastline asset, SVG map with arrows, time slider (**done**: also heat cells, faded land arrows, tap/keyboard read-out, vitest for web utils) |
 | M3 | Ratings: sport icons, direction sectors and warnings, estimated gusts, unit toggle, light/dark, mobile layout |
 | M4 | NWS gridpoint, live observations, advisories, marine text, tides, sunrise/sunset, accuracy panel, **History page (forecast vs observed, §8.6)** |
 | M5 | Worker + D1, email signup with double opt-in, alert matching, Resend emails |

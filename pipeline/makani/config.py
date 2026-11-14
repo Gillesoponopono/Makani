@@ -24,6 +24,10 @@ def load_ratings(config_dir: Path | None = None) -> dict[str, Any]:
     return _load("ratings.json", config_dir)
 
 
+def load_map(config_dir: Path | None = None) -> dict[str, Any]:
+    return _load("map.json", config_dir)
+
+
 def local_tz(spots_cfg: dict[str, Any]) -> timezone:
     """Hawaii has no DST, so a fixed offset is exact."""
     return timezone(timedelta(hours=spots_cfg["utcOffsetHours"]), "HST")

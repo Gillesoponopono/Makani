@@ -15,7 +15,7 @@ from .net import FetchError, Fetcher, http_get
 BASE_URL = "https://pae-paha.pacioos.hawaii.edu/erddap"
 DATASET = "wrf_mo"
 
-__all__ = ["ErddapError", "Fetcher", "http_get", "coverage_end", "point_series", "griddap_url", "parse_table"]
+__all__ = ["ErddapError", "Fetcher", "http_get", "coverage_end", "point_series", "box_series", "griddap_url", "parse_table"]
 
 
 class ErddapError(FetchError):
@@ -62,4 +62,12 @@ def point_series(lat: float, lon: float, time_start: str, variables: Sequence[st
                  fetch: Fetcher = http_get) -> list[dict[str, Any]]:
     """Hourly rows for the grid cell nearest (lat, lon), from time_start to the end of the run."""
     url = griddap_url(variables, time_start, (lat, lat), (lon, lon))
+    return parse_table(fetch(url))
+
+
+def box_series(bbox: dict[str, float], stride: int, time_start: str, variables: Sequence[str],
+               fetch: Fetcher = http_get) -> list[dict[str, Any]]:
+    """Hourly rows over a lat/lon box at `stride` grid steps (for the map)."""
+    url = griddap_url(variables, time_start, (bbox["latMin"], bbox["latMax"]),
+                      (bbox["lonMin"], bbox["lonMax"]), stride=stride)
     return parse_table(fetch(url))
