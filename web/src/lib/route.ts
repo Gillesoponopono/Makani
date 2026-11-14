@@ -1,6 +1,7 @@
 // Hash routes (GitHub Pages friendly):
 //   #/kanaha            spot, default day (today, or tomorrow once today's sun has set)
 //   #/kanaha/today      #/kanaha/tomorrow      #/kanaha/days      #/kanaha/2026-11-16
+//   #/guide             Guide & sources (from the menu)
 // The pre-redesign #/spot/<id> links still work.
 
 export type View = 'today' | 'tomorrow' | 'days' | { date: string }
@@ -8,10 +9,14 @@ export type View = 'today' | 'tomorrow' | 'days' | { date: string }
 export interface Route {
   spot: string | null
   view: View | null
+  page?: 'guide'
 }
+
+export const GUIDE_HASH = '#/guide'
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
+  if (parts[0] === 'guide') return { spot: null, view: null, page: 'guide' }
   if (parts[0] === 'spot') parts.shift()
   const spot = parts[0] && /^[\w-]+$/.test(parts[0]) ? parts[0] : null
   const v = parts[1]

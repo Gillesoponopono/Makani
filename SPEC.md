@@ -353,8 +353,8 @@ Create or manage alerts (§9). Shows the user's push alerts for this browser. Em
 - First analysis (2026-11-14, `pipeline/tools/error_factors.py`, 14 months, forecasts 1–2 days ahead, 9 AM–5 PM): the forecast strength is the main driver of the error, then the direction; month, hour, air temperature and clouds matter little overall. Model vs its own cell: Kahului Harbor +3.1 kn bias, 4.2 kn MAE, growing with the forecast strength (+7.7 kn when ≥ 25 kn); Kahului Airport −1.6 kn, 3.5 kn MAE, only 2.5 kn in trades ≥ 14 kn after 11 AM, but 8 kn under on hot days with a light non-trade forecast (sea breeze the model misses).
 - Honest caveats on the page: the stations aren't exactly at the spot (Harbor on the waterfront west of Kanahā, airport inland), and WRF is a 2 km cell value.
 
-### 8.7 About `#/about`
-Data sources and attribution (PacIOOS/UH WRF, NWS, NOAA CO-OPS), the gust estimate explained, model limits (2 km grid, sea breeze/thermal effects at Kihei), how ratings work, privacy note, and disclaimer.
+### 8.7 Guide & sources `#/guide` (built)
+From the menu (☰ → Guide & sources), so the forecast screen carries no long text and no footer: how to read the chart (wind, best session, estimated gusts, the adjusted line with each spot's before/after typical miss, direction colours and table marks, sky, waves, tide, water, units, map dots), the data sources with links (PacIOOS WRF, SWAN, WaveWatch III, ROMS, NOAA CO-OPS, the anemometers, the coastline), and the warning. The forecast screen keeps only the one-line model run / update time.
 
 ---
 

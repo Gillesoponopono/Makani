@@ -12,6 +12,10 @@ describe('routes', () => {
   it('keeps the old #/spot/<id> links working', () => {
     expect(parseRoute('#/spot/sprecks')).toEqual({ spot: 'sprecks', view: null })
   })
+  it('opens the guide', () => {
+    expect(parseRoute('#/guide')).toEqual({ spot: null, view: null, page: 'guide' })
+    expect(parseRoute('#/kanaha').page).toBeUndefined()
+  })
   it('ignores junk days', () => {
     expect(parseRoute('#/kanaha/someday').view).toBeNull()
   })

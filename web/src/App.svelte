@@ -3,9 +3,10 @@
   import UnitToggles from './components/UnitToggles.svelte'
   import SpotDay from './routes/SpotDay.svelte'
   import SpotDays from './routes/SpotDays.svelte'
+  import Guide from './routes/Guide.svelte'
   import { loadMeta, loadSpot } from './lib/data'
   import { addDays, ageHours, dateLong, groupByDay, nowHoursHst, timeAgo, todayKey } from './lib/format'
-  import { parseRoute, routeHash, type View } from './lib/route'
+  import { GUIDE_HASH, parseRoute, routeHash, type View } from './lib/route'
   import { loadPrefs, savePrefs, type Prefs, type TempUnit, type WindUnit } from './lib/units'
   import type { Meta, SpotDoc } from './lib/types'
 
@@ -86,7 +87,7 @@
   {@const spotId = spotIdFor(meta)}
   {@const doc = docs.find((d) => d.id === spotId)!}
   {@const view = resolveView(doc)}
-  {@const tab = tabOf(view)}
+  {@const tab = route.page ? null : tabOf(view)}
   {@const dayCount = groupByDay(doc.hours, doc.sun).filter((d) => d.date >= today).length}
   {@const tabs = [
     { id: 'today', label: 'Today', href: routeHash(spotId, 'today') },
@@ -135,10 +136,10 @@
               <div class="menu-label">Units</div>
               <UnitToggles wind={prefs.wind} temp={prefs.temp} onwind={setWind} ontemp={setTemp} />
             </div>
-            {#if view !== 'days'}
+            {#if view !== 'days' && !route.page}
               <button type="button" onclick={() => scrollToId('hourly')}>Hourly table</button>
             {/if}
-            <button type="button" onclick={() => scrollToId('credits')}>Data &amp; credits</button>
+            <a href={GUIDE_HASH} onclick={() => (menuOpen = false)}>Guide &amp; sources</a>
           </div>
         {/if}
       </div>
@@ -152,7 +153,9 @@
       <p class="banner warn" role="status">Forecast data is {Math.round(age)} hours old.</p>
     {/if}
 
-    {#if view === 'days'}
+    {#if route.page === 'guide'}
+      <Guide {meta} {docs} backHref={routeHash(spotId)} backName={`Back to ${doc.displayName}`} />
+    {:else if view === 'days'}
       <SpotDays {meta} {doc} wind={prefs.wind} temp={prefs.temp} dayHref={(d) => routeHash(spotId, { date: d })} />
     {:else}
       <SpotDay
@@ -167,7 +170,9 @@
       />
     {/if}
 
-    <p class="run">PacIOOS WRF model run through {dateLong(meta.wrf.end.slice(0, 10))} · updated {timeAgo(meta.generatedAt)}</p>
+    {#if !route.page}
+      <p class="run">PacIOOS WRF model run through {dateLong(meta.wrf.end.slice(0, 10))} · updated {timeAgo(meta.generatedAt)}</p>
+    {/if}
   </main>
 
   <nav class="tabbar" aria-label="Forecast day">
@@ -188,21 +193,6 @@
   <main><p class="status error">Forecast data isn't available right now ({err.message}).</p></main>
 {/await}
 
-<footer class="foot" id="credits">
-  <p>
-    Wind model: <a href="https://www.pacioos.hawaii.edu/weather/model-wind-maui/">PacIOOS WRF Maui-Oʻahu</a> (University of
-    Hawaiʻi, Yi-Leng Chen), funded by NOAA/IOOS. Waves: <a href="https://www.pacioos.hawaii.edu/waves/model-maui/">PacIOOS
-    SWAN Maui</a> and <a href="https://www.pacioos.hawaii.edu/waves/model-hawaii/">WaveWatch III Hawaiʻi</a>. Sea
-    temperature: <a href="https://www.pacioos.hawaii.edu/currents/model-hawaii/">PacIOOS ROMS Hawaiʻi</a>. Tides:
-    <a href="https://tidesandcurrents.noaa.gov/">NOAA CO-OPS</a> predictions for Kahului (1615680) and Makena (1615202).
-    Spots placed on the picture using the US Census coastline (Hawaiʻi Statewide GIS Program). The island picture is
-    illustrative.
-  </p>
-  <p>
-    Forecasts can be wrong. This site doesn't replace checking conditions on the beach, local knowledge or official NWS
-    warnings. Kite at your own risk.
-  </p>
-</footer>
 
 <style>
   .top {
@@ -306,7 +296,8 @@
     padding: 8px;
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
   }
-  .menu > button {
+  .menu > button,
+  .menu > a {
     padding: 10px 12px;
     border: 0;
     border-radius: 10px;
@@ -315,7 +306,12 @@
     cursor: pointer;
     font-weight: 500;
   }
-  .menu > button:hover {
+  .menu > a {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .menu > button:hover,
+  .menu > a:hover {
     background: var(--surface-3);
   }
   .menu-units {
@@ -353,17 +349,6 @@
     color: var(--faint);
     font-size: 0.8rem;
   }
-  .foot {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 18px 20px 28px;
-    border-top: 1px solid var(--border);
-    color: var(--faint);
-    font-size: 0.8rem;
-  }
-  .foot a {
-    color: var(--muted);
-  }
   .tabbar {
     display: none;
   }
@@ -393,10 +378,7 @@
       margin-left: auto;
     }
     main {
-      padding: 14px 12px 24px;
-    }
-    .foot {
-      padding-bottom: 96px; /* room for the tab bar */
+      padding: 14px 12px 104px; /* room for the tab bar */
     }
     .tabbar {
       position: fixed;

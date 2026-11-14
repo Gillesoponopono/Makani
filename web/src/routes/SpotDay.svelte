@@ -161,23 +161,6 @@
       tide={doc.tide ?? null}
       waveStatus={doc.waves?.status ?? null}
     />
-    <p class="chart-note">
-      Arrows under the chart point where the wind blows: <span class="s-good">good</span>,
-      <span class="s-ok">OK</span>, <span class="s-poor">poor</span> or <span class="s-danger">offshore</span> for this spot.
-      Gusts are estimated (wind × {meta.ratings.gustFactor}).
-      {#if doc.adjusted}
-        Adjusted: the model corrected with 14 months of forecasts against the {doc.adjusted.reference}; there it cut the
-        typical miss in kiting hours from {doc.adjusted.maeRaw?.toFixed(1)} to {doc.adjusted.maeAdj?.toFixed(1)} kn. The
-        anemometers aren't on the beach, which may get more wind.
-      {/if}
-      {#if doc.waves?.status === 'ok'}
-        Waves: model height just off the beach and peak period (PacIOOS SWAN); the type comes from the offshore swell
-        and wind-chop split (WaveWatch III).
-      {/if}
-      {#if doc.tide}
-        Tide: NOAA predictions above mean lower low water.
-      {/if}
-    </p>
   </section>
 
   <DayStats hour={shownHour} sun={day.sun} {temp} {ontemp} tide={doc.tide ?? null} waveStatus={doc.waves?.status ?? null} />
