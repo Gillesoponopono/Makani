@@ -2,7 +2,8 @@
   // The aerial picture of Maui with one marker per spot: a dot at the beach and a
   // chip with the wind arrow (pointing downwind, coloured by speed) and the
   // speed for the chosen hour, plus small dots for the measuring points: anemometers
-  // (red) and wave buoys (yellow). Positions come from web/scripts/build-aerial.mjs.
+  // (red) and wave buoys (yellow), named on hover. Positions come from
+  // web/scripts/build-aerial.mjs.
   import aerial960 from '../assets/maui-aerial-960.webp'
   import aerial1536 from '../assets/maui-aerial-1536.webp'
   import placement from '../assets/maui-aerial-spots.json'
@@ -167,12 +168,6 @@
   {/each}
 
   <div class="corner">
-    {#if stationDots.length}
-      <ul class="key" aria-label="Measuring points">
-        {#if stationDots.some((s) => s.kind === 'anemometer')}<li><span class="st anemometer"></span>Anemometer</li>{/if}
-        {#if stationDots.some((s) => s.kind === 'buoy')}<li><span class="st buoy"></span>Wave buoy</li>{/if}
-      </ul>
-    {/if}
     {#if shownHour}
       <p class="when">Wind at {hourLabel(shownHour.t)}</p>
     {/if}
@@ -321,33 +316,6 @@
   }
   .corner .when {
     position: static;
-  }
-  .key {
-    display: flex;
-    gap: 10px;
-    margin: 0;
-    padding: 3px 9px;
-    list-style: none;
-    border-radius: 999px;
-    background: rgba(6, 20, 36, 0.7);
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 0.68rem;
-    font-weight: 600;
-  }
-  .key li {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .block .key {
-    /* narrow on phones: one item per line, clear of the Kīhei chips on the left */
-    flex-direction: column;
-    gap: 2px;
-    border-radius: 10px;
-  }
-  .key .st {
-    position: static;
-    margin: 0;
   }
   .st {
     position: absolute;
