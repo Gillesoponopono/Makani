@@ -52,6 +52,7 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 | **NOAA CO-OPS tide predictions** (Kahului `1615680`, Makena `1615202`) | High/low tides and an hourly curve, feet above MLLW | GitHub Action | with each new WRF run (predictions are deterministic; the last good block is kept if NOAA fails) |
 | **PacIOOS SWAN Maui** `swan_maui` (ERDDAP griddap, ~500 m) | Waves just off each beach: height, peak period, peak direction, hourly, ~7 days | GitHub Action | with each new WRF run |
 | **PacIOOS WaveWatch III Hawaii** `ww3_hawaii` (ERDDAP griddap, ~5 km) | Offshore sea split into wind waves and swell (gives the wave type) | GitHub Action | with each new WRF run |
+| **PacIOOS ROMS Hawaii** `roms_hiig` (ERDDAP griddap, ~4 km, 3-hourly) | Sea surface temperature just offshore of each spot (top level, 0.25 m), ~5 days | GitHub Action | with each new WRF run |
 | **Sunrise/sunset** | Computed locally (NOAA solar algorithm), no API | Action (for alert windows) and browser | — |
 | **Coastline** | Maui coastline polygon (OSM coastline or Hawaii Statewide GIS), simplified at build time | committed asset | static |
 
@@ -93,10 +94,11 @@ The single source of truth is `config/spots.json`, shared by the pipeline, the w
 | `kanaha` | Kanaha (Kite Beach) | 20.899, −156.447 | nearest **offshore water** cell, set by hand | HFO 213,126 | PHOG | Kahului 1615680 | PHZ117 |
 | `sprecks` | Spreckelsville | 20.907, −156.410 | nearest offshore water cell | HFO 215,127 | PHOG | Kahului 1615680 | PHZ117 |
 | `harbor` | Kahului Harbor (Hoaloha Park launch, wing foil) | 20.8938, −156.468 | 20.902, −156.46 (harbor mouth) | HFO 212,126 | Kahului Harbor 1615680, at the harbor itself | Kahului 1615680 | PHZ117 |
+| `hookipa` | Hoʻokipa (mainly windsurf and surf; State restricted zones, HAR 13-256-127, to check before kiting) | 20.9336, −156.3566 | 20.956, −156.36 (~2.5 km out) | HFO 217,128 | PHOG (~9 km west) | Kahului 1615680 | PHZ117 |
 | `maui-sunset` | Maui Sunset (Kihei) | 20.751, −156.459 | nearest offshore water cell | HFO 213,120 | nearest from `/gridpoints/HFO/213,120/stations` that reports wind | Makena 1615202 (subordinate) | PHZ119 |
 | `keawakapu` | Keawakapu (Kihei) | 20.701, −156.446 | 20.704, −156.48 (~3.5 km out; the 1.4 km cell read up to 7 kn lower, likely land in the model cell) | HFO 213,117 | none yet (as Maui Sunset) | Makena 1615202 (subordinate) | PHZ119 |
 
-**Wave cells** (`waves` in the config, checked 2026-11-13 for valid model values): SWAN 20.905, −156.445 (Kanahā, ~0.7 km out), 20.915, −156.41 (Sprecks), 20.75, −156.465 (Maui Sunset), 20.70, −156.45 (Keawakapu); WW3 20.95, −156.45 / 20.95, −156.40 off the north shore and 20.70, −156.50 off Kīhei. The Harbor is `sheltered`: SWAN's 500 m grid doesn't resolve the basin (its nearest cells read open-ocean swell), so the site says "flat water, wind chop only" there.
+**Wave cells** (`waves` in the config, checked 2026-11-13 for valid model values): SWAN 20.905, −156.445 (Kanahā, ~0.7 km out), 20.915, −156.41 (Sprecks), 20.94, −156.355 (Hoʻokipa), 20.75, −156.465 (Maui Sunset), 20.70, −156.45 (Keawakapu); WW3 20.95, −156.45 / 20.95, −156.40 / 20.95, −156.35 off the north shore and 20.70, −156.50 off Kīhei. The Harbor is `sheltered`: SWAN's 500 m grid doesn't resolve the basin (its nearest cells read open-ocean swell), so the site says "flat water, wind chop only" there.
 
 Coordinates are approximate and **must be checked on a map** before launch.
 
@@ -110,6 +112,7 @@ Directions are **meteorological "from"** degrees.
 | Kanaha | 30–100 (NE–E trades, side-on) | 0–30, 100–130 | 150–270 (S–W, offshore) |
 | Sprecks | 45–90 | 20–45, 90–110 | 140–260 |
 | Kahului Harbor | 30–100 (NE–E trades across the harbor; same as Kanaha, to confirm locally) | 0–30, 100–130 | 150–270 (S–W, offshore) |
+| Hoʻokipa | 30–80 (NE–ENE trades, side-shore from the right; shore faces ~334°) | 0–30, 80–100 (E is side-off) | 125–250 (SE–WSW, offshore) |
 | Maui Sunset | 340–30 (N–NNE funnel, side-shore) | 300–340, 30–50 | 50–160 (E–SE, offshore & gusty) |
 | Keawakapu | 340–30 (same west-facing coast as Maui Sunset; to confirm locally) | 300–340, 30–50 | 50–160 (E–SE, offshore & gusty) |
 
@@ -194,8 +197,9 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
 3. **Build spot series** (§7.4) and **map frames** (§7.5).
 4. **NWS:** gridpoint raw forecasts per spot (expand intervals to hourly, km/h → kn); active alerts for `PHZ117,PHZ119,HIZ045,HIZ049`; latest CWF product → split out the PHZ117/PHZ119 sections.
    **Observations** (implemented in M1, `makani/obs.py`): every run re-reads the last 7 days from Kahului Harbor (CO-OPS) and PHOG (NWS), bins them to hourly values and merges them into `archive/obs/` (§7.6). Re-reading 7 days catches PHOG values that QC fills in late. A failing station is a warning only.
-5. **Waves and tides** (implemented, `makani/waves.py`, `makani/tides.py`), with each new WRF run, after the wind is built and validated. They are extras: a failure is a warning, never a reason not to publish the wind.
+5. **Waves, sea temperature and tides** (implemented, `makani/waves.py`, `makani/water.py`, `makani/tides.py`), with each new WRF run, after the wind is built and validated. They are extras: a failure is a warning, never a reason not to publish the wind.
    - Waves: one SWAN request per spot (`shgt,pper,pdir`, local midnight → `last`) and one WW3 request per distinct offshore cell (`whgt,wper,wdir,shgt,sper,sdir`). Both datasets have a depth axis (`[(0)]`) and 0–360 longitudes. Rule for the wave type in §8.8.
+   - Sea temperature: one ROMS request per distinct cell (`temp`, depth `[(0.25)]`, from 3 h before local midnight → `last`, normal −180–180 longitudes). Cells are picked by hand just offshore (config `water`), because the shallows at the beach are masked; hours are interpolated between the 3-hour steps.
    - Tides: CO-OPS `datagetter` `product=predictions`, `datum=MLLW`, `units=english`, `time_zone=lst`: `interval=hilo` from the day before to the day after the forecast, plus `interval=h` for the curve at harmonic stations. Makena (subordinate) has no hourly product (NOAA answers "No Predictions data"), so its curve is a cosine fit between its highs and lows. If NOAA fails, the previously published tide block is kept.
 6. **Verification:** pair archived forecasts with archived observations (Kahului Harbor for Kanahā/Sprecks, PHOG as a second reference) → mean bias, MAE (kn), direction error, **by lead time** (same day, D-1, D-2, …). Shown on the Accuracy panel and the History page (§8.6).
 7. **Validate** the output (`pipeline/makani/validate.py`: hour count, hourly steps, value ranges, known sectors/sports). If anything fails, keep the previous files and fail the job loudly; never publish partial data.
@@ -212,6 +216,7 @@ meta.json            run info, per-source status, generatedAt, schemaVersion
 spots/kanaha.json    hourly series per spot
 spots/sprecks.json
 spots/harbor.json
+spots/hookipa.json
 spots/maui-sunset.json
 spots/keawakapu.json
 map/frames.json      quantized wind grid for all hours
@@ -240,10 +245,12 @@ archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST 
         "type": "mixed",                                  // flat | chop | swell | mixed
         "swell": { "m": 1.96, "per": 12.9, "dir": 350 },  // WW3 offshore split; chop is null when it blows out to sea
         "chop":  { "m": 1.61, "per": 7.4, "dir": 69 }
-      }
+      },
+      "waterC": 25.6                                      // ROMS sea surface °C, null without a value
     }
   ],
   "waves": { "status": "ok", "swanCell": { "lat": 20.905, "lon": -156.445 }, "ww3Cell": { "lat": 20.95, "lon": -156.45 } },
+  "water": { "status": "ok", "cell": { "lat": 20.931, "lon": -156.444 } },
   "tide": {                                               // null if the spot has no station
     "station": "1615680", "name": "Kahului Harbor", "kind": "harmonic", "datum": "MLLW", "units": "ft",
     "curve": { "start": "2026-11-13T00:00:00-10:00", "stepMinutes": 60, "ft": [0.59, 1.05, "..."] },
@@ -252,7 +259,7 @@ archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST 
   "sun": [{ "date": "2026-11-13", "rise": "06:41", "set": "17:47" }]
 }
 ```
-`meta.json` gains `waves.spots` (status per spot: ok / sheltered / error) and `tides.stations` (ok / kept / error). Schema version 3.
+`meta.json` gains `waves.spots` (status per spot: ok / sheltered / error), `water.spots` (ok / error) and `tides.stations` (ok / kept / error). Schema version 4 (3 added waves and tides, 4 sea temperature).
 Sectors and sports are computed in the pipeline (one implementation, also used by alerts). The front end only displays them.
 
 ### 7.5 `map/frames.json`
@@ -298,7 +305,7 @@ Implemented in M2 (`makani/mapframes.py`), box and stride in `config/map.json`. 
 
 ### 8.1 General
 - Svelte 5 + Vite, TypeScript, no UI framework. Hand-written SVG for the chart, arrows and icons.
-- **"Pacific" design** (concept supplied 2026-11-13, web + phone): one dark, ocean-led theme, deep navy surfaces, amber accent for the best session and the active tab, headings in Outfit (self-hosted via `@fontsource-variable/outfit`, no third-party request). Dark only by design.
+- **"Pacific" design** (concept supplied 2026-11-13, web + phone): one dark, ocean-led theme, deep navy surfaces, amber accent for the best session on the chart and the active tab, headings in Outfit (self-hosted via `@fontsource-variable/outfit`, no third-party request). Dark only by design.
 - **Hash routing** (GitHub Pages friendly): `#/<spot>` (today, or tomorrow once today's sun has set at the spot), `#/<spot>/today`, `#/<spot>/tomorrow`, `#/<spot>/days`, `#/<spot>/<YYYY-MM-DD>`. Old `#/spot/<id>` links still work. Later: `#/history`, `#/alerts`, `#/about`.
 - **Header:** logo, **location menu** listing the spots (Kanahā, Spreckelsville, Kahului Harbor, Maui Sunset, Keawakapu), tabs **Today / Tomorrow / N Days** (N = days the model covers), **wind unit kn / mph / km/h** and **°C / °F**, and a menu (units on small screens, hourly table, data & credits). On phones the tabs move to a bottom tab bar.
 - Spot and units are remembered in `localStorage` (wrapped in try/catch; the site works without it).
@@ -308,7 +315,7 @@ Implemented in M2 (`makani/mapframes.py`), box and stride in `config/map.json`. 
 - PWA (manifest + service worker, needed for Web Push) comes with M6.
 
 ### 8.2 Spot day `#/<spot>/<day>`
-1. **Hero:** "Tomorrow / at Kanahā (Kite Beach)", the date, a lower-confidence tag from day 3, and the **Best session** card ("7 AM–6 PM | 15–21 kn": longest daylight stretch that is kiteable, §5.1). On wide screens the island picture fills the right of the hero (§8.4); on phones it sits under the title.
+1. **Hero:** "Tomorrow / at Kanahā (Kite Beach)", the date, a lower-confidence tag from day 3, and **four day tiles** (`DayTiles.svelte`, `lib/summary.ts`) over the day's daylight hours: **Wind** "15–21 kn" with the speed-weighted mean direction and top gust ("ENE · gusts to 27"); **Air** "24–26 °C"; **Water** "26 °C" (sea surface, ROMS); **Waves** "1.1–1.3 m" with the period range and the most common type ("15–17 s · Swell + chop"), "Flat" under 0.3 m or at the sheltered harbor. Units follow the toggles. The stats under the chart give the same things for the selected hour. On wide screens the island picture fills the right of the hero (§8.4); on phones it sits under the title.
 2. **Wind Forecast** card (`WindChart.svelte`, geometry in `lib/chart.ts`): wind (3 px, coloured hour by hour by the knots scale, blue → green → yellow → orange) and estimated gusts (grey) on one axis shared by all days of the spot, in the chosen unit; area under the wind fading out; **best session** shaded amber with its bounds labelled on the time axis; the session's peak labelled ("21 kn"); night shaded; "NOW" line on today; a strip of **direction arrows** under the time axis coloured by sector (good / OK / poor / offshore). Hover, tap or keys select an hour: crosshair + readout, and the hero map and the stats follow that hour.
    Under the arrows, on the same time axis: the **wave strip** and the **tide panel** (§8.8).
 3. **Stats** card, 3 × 2 (2 × 3 on phones): direction (arrow, compass point, words, sector note), waves, tide, air temperature (tap to switch °C/°F), sunrise, sunset. All but the sun follow the selected hour, else the current hour (today) or the session peak.
@@ -422,7 +429,7 @@ Makani/
 │  ├─ ratings.json              # sport bands, gust factor
 │  └─ map.json                  # map box, grid stride, coastline source
 ├─ pipeline/                    # Python 3.12
-│  ├─ makani/{erddap,thredds,obs,waves,tides,sun,ratings,build,archive,validate}.py (later nws, alerts)
+│  ├─ makani/{erddap,thredds,obs,waves,water,tides,sun,ratings,build,archive,validate}.py (later nws, alerts)
 │  ├─ tests/                    # pytest, with recorded fixtures
 │  └─ pyproject.toml            # stdlib only in M1; pywebpush added in M6
 ├─ web/                         # Svelte + Vite + TS
@@ -462,7 +469,7 @@ Makani/
 
 ## 12. Legal, attribution, privacy
 
-- Footer and About: "Model data: PacIOOS WRF Maui-Oahu (University of Hawaiʻi, Yi-Leng Chen), funded by NOAA/IOOS. Waves: PacIOOS SWAN Maui and WaveWatch III Hawaiʻi. Forecasts, observations and advisories: NOAA National Weather Service. Tides: NOAA CO-OPS."
+- Footer and About: "Model data: PacIOOS WRF Maui-Oahu (University of Hawaiʻi, Yi-Leng Chen), funded by NOAA/IOOS. Waves: PacIOOS SWAN Maui and WaveWatch III Hawaiʻi. Sea temperature: PacIOOS ROMS Hawaiʻi. Forecasts, observations and advisories: NOAA National Weather Service. Tides: NOAA CO-OPS."
 - Disclaimer: forecasts can be wrong; not a substitute for checking conditions on site, local knowledge, or official NWS warnings. Kite at your own risk.
 - Privacy: only an email address (if given) and push endpoints are stored, used only for alerts, deletable at any time through the manage link. No analytics, no cookies, no third-party trackers.
 - Hawaiian names spelled with ʻokina and kahakō where correct (e.g. Kanahā, Hoʻokipa) in display text; ASCII ids in code.

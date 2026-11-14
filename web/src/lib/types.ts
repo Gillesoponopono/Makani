@@ -15,6 +15,7 @@ export interface Hour {
   sports: string[]
   daylight: boolean
   wave?: Wave | null // missing before schema 3, null when the model has no value
+  waterC?: number | null // sea surface °C (PacIOOS ROMS); missing before schema 4
 }
 
 export type WaveType = 'flat' | 'chop' | 'swell' | 'mixed'
@@ -69,6 +70,7 @@ export interface SpotDoc {
   sun: SunDay[]
   waves?: { status: 'ok' | 'sheltered' | 'error' | 'none'; swanCell?: { lat: number; lon: number }; ww3Cell?: { lat: number; lon: number } | null }
   tide?: Tide | null
+  water?: { status: 'ok' | 'error' | 'none'; cell?: { lat: number; lon: number } }
 }
 
 export interface SportBand {
@@ -90,4 +92,5 @@ export interface Meta {
   map?: { file: string; hours: number; grid: [number, number] }
   waves?: { datasets: string[]; spots: Record<string, string> }
   tides?: { source: string; stations: Record<string, string> }
+  water?: { dataset: string; spots: Record<string, string> }
 }

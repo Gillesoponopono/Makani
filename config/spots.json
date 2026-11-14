@@ -35,6 +35,7 @@
       "nws": { "gridpoint": "HFO/213,126", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
       "tideStation": "1615680",
       "waves": { "swan": { "lat": 20.905, "lon": -156.445 }, "ww3": { "lat": 20.95, "lon": -156.45 } },
+      "water": { "lat": 20.931, "lon": -156.444 },
       "sectors": {
         "good": [[30, 100]],
         "ok": [[0, 30], [100, 130]],
@@ -50,6 +51,7 @@
       "nws": { "gridpoint": "HFO/215,127", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
       "tideStation": "1615680",
       "waves": { "swan": { "lat": 20.915, "lon": -156.41 }, "ww3": { "lat": 20.95, "lon": -156.4 } },
+      "water": { "lat": 20.931, "lon": -156.405 },
       "sectors": {
         "good": [[45, 90]],
         "ok": [[20, 45], [90, 110]],
@@ -65,10 +67,28 @@
       "nws": { "gridpoint": "HFO/212,126", "obsStation": "PHOG", "landZone": "HIZ045", "marineZone": "PHZ117" },
       "tideStation": "1615680",
       "waves": { "sheltered": true },
+      "water": { "lat": 20.931, "lon": -156.482 },
       "sectors": {
         "good": [[30, 100]],
         "ok": [[0, 30], [100, 130]],
         "danger": [[150, 270]]
+      }
+    },
+    {
+      "id": "hookipa",
+      "name": "Hookipa",
+      "displayName": "Hoʻokipa",
+      "beach": { "lat": 20.9336, "lon": -156.3566 },
+      "wrfCell": { "lat": 20.956, "lon": -156.36 },
+      "nws": { "gridpoint": "HFO/217,128", "obsStation": "PHOG", "landZone": "HIZ047", "marineZone": "PHZ117" },
+      "tideStation": "1615680",
+      "waves": { "swan": { "lat": 20.94, "lon": -156.355 }, "ww3": { "lat": 20.95, "lon": -156.35 } },
+      "water": { "lat": 20.967, "lon": -156.367 },
+      "note": "Shore faces ~334° (NNW): ENE trades are side-shore from the right, E side-off, S offshore. Mainly a windsurf and surf spot: check the local rules (State restricted zones, HAR 13-256-127) before kiting",
+      "sectors": {
+        "good": [[30, 80]],
+        "ok": [[0, 30], [80, 100]],
+        "danger": [[125, 250]]
       }
     },
     {
@@ -80,6 +100,7 @@
       "nws": { "gridpoint": "HFO/213,120", "obsStation": null, "landZone": "HIZ049", "marineZone": "PHZ119" },
       "tideStation": "1615202",
       "waves": { "swan": { "lat": 20.75, "lon": -156.465 }, "ww3": { "lat": 20.7, "lon": -156.5 } },
+      "water": { "lat": 20.752, "lon": -156.482 },
       "sectors": {
         "good": [[340, 30]],
         "ok": [[300, 340], [30, 50]],
@@ -95,6 +116,7 @@
       "nws": { "gridpoint": "HFO/213,117", "obsStation": null, "landZone": "HIZ049", "marineZone": "PHZ119" },
       "tideStation": "1615202",
       "waves": { "swan": { "lat": 20.7, "lon": -156.45 }, "ww3": { "lat": 20.7, "lon": -156.5 } },
+      "water": { "lat": 20.716, "lon": -156.482 },
       "sectors": {
         "good": [[340, 30]],
         "ok": [[300, 340], [30, 50]],

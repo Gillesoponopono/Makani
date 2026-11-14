@@ -192,7 +192,8 @@
   <p>
     Wind model: <a href="https://www.pacioos.hawaii.edu/weather/model-wind-maui/">PacIOOS WRF Maui-Oʻahu</a> (University of
     Hawaiʻi, Yi-Leng Chen), funded by NOAA/IOOS. Waves: <a href="https://www.pacioos.hawaii.edu/waves/model-maui/">PacIOOS
-    SWAN Maui</a> and <a href="https://www.pacioos.hawaii.edu/waves/model-hawaii/">WaveWatch III Hawaiʻi</a>. Tides:
+    SWAN Maui</a> and <a href="https://www.pacioos.hawaii.edu/waves/model-hawaii/">WaveWatch III Hawaiʻi</a>. Sea
+    temperature: <a href="https://www.pacioos.hawaii.edu/currents/model-hawaii/">PacIOOS ROMS Hawaiʻi</a>. Tides:
     <a href="https://tidesandcurrents.noaa.gov/">NOAA CO-OPS</a> predictions for Kahului (1615680) and Makena (1615202).
     Spots placed on the picture using the US Census coastline (Hawaiʻi Statewide GIS Program). The island picture is
     illustrative.

@@ -35,7 +35,9 @@
   const shortName = (d: SpotDoc) => SHORT[d.id] ?? d.displayName.replace(/\s*\(.*\)/, '')
 
   // Crop of the 1536x1024 picture: whole island, or the central valley where all spots are.
-  const crop = $derived(mode === 'hero' ? { x: 0, y: 0, w: PW, h: PH } : { x: 150, y: 20, w: 720, h: 720 })
+  // The block crop starts above the picture (y < 0) so the north-shore chips have sea to
+  // sit on: Hoʻokipa is close to the picture's top edge.
+  const crop = $derived(mode === 'hero' ? { x: 0, y: 0, w: PW, h: PH } : { x: 150, y: -40, w: 720, h: 780 })
 
   let boxW = $state(0)
   let boxH = $state(0)
@@ -156,6 +158,11 @@
     object-fit: fill;
     user-select: none;
     pointer-events: none;
+  }
+  .block img {
+    /* the picture's top edge fades into the sea band above it */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 7%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 7%);
   }
   .hero img {
     /* melt the picture's edges into the hero's sea */

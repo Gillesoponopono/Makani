@@ -43,6 +43,14 @@ def wave_table(n_hours: int, cols: list[str], values: list[float]) -> bytes:
                                  "rows": rows}}).encode()
 
 
+def roms_table(n_hours: int) -> bytes:
+    """Sea temperature every 3 h from 3 h before the start, warming 0.1 °C per step."""
+    rows = [[(START + timedelta(hours=3 * i - 3)).strftime("%Y-%m-%dT%H:%M:%SZ"), 0.25, 20.931, -156.444,
+             25.5 + 0.1 * i] for i in range(n_hours // 3 + 2)]
+    return json.dumps({"table": {"columnNames": ["time", "depth", "latitude", "longitude", "temp"],
+                                 "rows": rows}}).encode()
+
+
 def tide_json(url: str) -> bytes:
     """Highs and lows every ~6 h 12 min, or an hourly curve, over the requested days."""
     q = dict(p.split("=", 1) for p in url.split("?", 1)[1].split("&"))
@@ -75,6 +83,8 @@ class FakeFetch:
         if "/ww3_hawaii." in url:
             return wave_table(self.n_hours, ["whgt", "wper", "wdir", "shgt", "sper", "sdir"],
                               [1.5, 6.9, 61, 1.3, 14.9, 340])
+        if "/roms_hiig." in url:
+            return roms_table(self.n_hours)
         if "/info/" in url:
             return info_csv(self.end)
         if ":2:" in url:  # stride-2 box = map query
@@ -89,7 +99,7 @@ def test_build_writes_spots_and_meta(tmp_path):
     meta = json.loads((tmp_path / "meta.json").read_text())
     assert meta["wrf"]["coverageEnd"] == "2026-11-18T00:00:00Z"
     assert meta["wrf"]["hours"] == 98
-    assert [s["id"] for s in meta["spots"]] == ["kanaha", "sprecks", "harbor", "maui-sunset", "keawakapu"]
+    assert [s["id"] for s in meta["spots"]] == ["kanaha", "sprecks", "harbor", "hookipa", "maui-sunset", "keawakapu"]
     # Query starts at local midnight (10:00Z).
     assert "2026-11-13T10:00:00Z" in fetch.urls[1]
 
@@ -121,10 +131,12 @@ def test_build_writes_spots_and_meta(tmp_path):
     assert sunset["hours"][0]["sports"] == []
 
 
-def test_build_adds_waves_and_tides(tmp_path):
+def test_build_adds_waves_water_and_tides(tmp_path):
     build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
     meta = json.loads((tmp_path / "meta.json").read_text())
-    assert meta["schemaVersion"] == 3
+    assert meta["schemaVersion"] == 4
+    assert meta["water"] == {"dataset": "roms_hiig", "spots": {s: "ok" for s in
+                             ["kanaha", "sprecks", "harbor", "hookipa", "maui-sunset", "keawakapu"]}}
     assert meta["tides"]["stations"] == {"1615202": "ok", "1615680": "ok"}
     assert meta["waves"]["spots"]["harbor"] == "sheltered"
 
@@ -132,6 +144,10 @@ def test_build_adds_waves_and_tides(tmp_path):
     w = kanaha["hours"][0]["wave"]
     assert (w["m"], w["per"], w["dir"], w["type"]) == (1.2, 14.7, 345, "mixed")
     assert kanaha["waves"]["status"] == "ok"
+    # Midnight sits 3 h after the first ROMS step (25.5) at the second one (25.6); 1 AM is a third of the way on.
+    assert [h["waterC"] for h in kanaha["hours"][:2]] == [25.6, 25.6]
+    assert kanaha["hours"][3]["waterC"] == 25.7
+    assert kanaha["water"]["status"] == "ok"
     tide = kanaha["tide"]
     assert tide["station"] == "1615680" and tide["kind"] == "harmonic"
     assert tide["curve"]["start"] == "2026-11-13T00:00:00-10:00"

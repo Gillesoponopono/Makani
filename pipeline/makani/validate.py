@@ -46,9 +46,11 @@ def validate_spot(doc: dict[str, Any], sport_ids: set[str]) -> None:
 
 
 def validate_extras(doc: dict[str, Any]) -> None:
-    """Waves and tides: optional, but never publish nonsense."""
+    """Waves, sea temperature and tides: optional, but never publish nonsense."""
     sid = doc.get("id", "?")
     for h in doc["hours"]:
+        c = h.get("waterC")
+        _check(c is None or 15 < c < 35, f"{sid}: implausible sea temperature {c} °C at {h['t']}")
         w = h.get("wave")
         if not w:
             continue

@@ -7,6 +7,8 @@ import type { TempUnit } from './units'
 
 const FT_PER_M = 3.28084
 const HOUR_MS = 3_600_000
+/** Under this the pipeline calls the sea flat (pipeline/makani/waves.py FLAT_M). */
+export const FLAT_M = 0.3
 
 export const lengthUnit = (temp: TempUnit) => (temp === 'f' ? 'ft' : 'm')
 

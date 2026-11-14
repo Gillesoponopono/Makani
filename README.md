@@ -1,6 +1,6 @@
 # Makani
 
-Free kitesurf wind forecast for Maui (Kanaha, Spreckelsville, Kahului Harbor, Maui Sunset, Keawakapu), built on the PacIOOS WRF `wrf_mo` model and NWS data, with waves (PacIOOS SWAN Maui and WaveWatch III) and tides (NOAA CO-OPS predictions). Static site on GitHub Pages, refreshed by GitHub Actions.
+Free kitesurf wind forecast for Maui (Kanaha, Spreckelsville, Kahului Harbor, Hoʻokipa, Maui Sunset, Keawakapu), built on the PacIOOS WRF `wrf_mo` model and NWS data, with waves (PacIOOS SWAN Maui and WaveWatch III), sea temperature (PacIOOS ROMS) and tides (NOAA CO-OPS predictions). Static site on GitHub Pages, refreshed by GitHub Actions.
 
 See [SPEC.md](SPEC.md) for the full specification.
 
@@ -9,7 +9,7 @@ See [SPEC.md](SPEC.md) for the full specification.
 | Path | What |
 |---|---|
 | `config/` | Spots (coordinates, model cell, direction sectors) and sport bands, shared by everything |
-| `pipeline/` | Python (stdlib only) that fetches WRF wind and SWAN/WW3 waves from ERDDAP and NOAA tide predictions, and writes the site's JSON |
+| `pipeline/` | Python (stdlib only) that fetches WRF wind, SWAN/WW3 waves and ROMS sea temperature from ERDDAP and NOAA tide predictions, and writes the site's JSON |
 | `web/` | Svelte + Vite site; `web/scripts/` builds the coastline and places the spots on the island picture (run once, outputs committed) |
 | `.github/workflows/` | `ci.yml` tests, `forecast.yml` hourly light check (full fetch only for a new run, observations every ~6 h), `deploy.yml` Pages deploy |
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Arrow from '../components/Arrow.svelte'
   import DayStats from '../components/DayStats.svelte'
+  import DayTiles from '../components/DayTiles.svelte'
   import IslandMap from '../components/IslandMap.svelte'
   import WindChart from '../components/WindChart.svelte'
   import { axisMax } from '../lib/chart'
@@ -18,7 +19,6 @@
     nowHoursHst,
     todayKey,
     weekdayLong,
-    windowLabel,
   } from '../lib/format'
   import { WAVE_TYPE, lengthUnit, tideAt, tideHeight, waveNumber } from '../lib/sea'
   import { tempLabel, windIn, windLabel, windUnitLabel, type TempUnit, type WindUnit } from '../lib/units'
@@ -123,22 +123,7 @@
         <IslandMap {docs} selected={doc.id} focusT={shownHour?.t ?? null} {wind} {hrefFor} mode="block" />
       </div>
 
-      <div class="session">
-        {#if win}
-          <div>
-            <div class="session-label">Best session</div>
-            <div class="session-time display">{windowLabel(win)}</div>
-          </div>
-          <div class="session-range display">
-            {windLabel(win.minKn, wind)}–{windLabel(win.maxKn, wind)} <span>{windUnitLabel(wind)}</span>
-          </div>
-        {:else}
-          <div>
-            <div class="session-label">Best session</div>
-            <div class="session-none">No kiteable window</div>
-          </div>
-        {/if}
-      </div>
+      <DayTiles hours={day.hours} {wind} {temp} waveStatus={doc.waves?.status ?? null} />
     </div>
     <div class="island-hero">
       <IslandMap {docs} selected={doc.id} focusT={shownHour?.t ?? null} {wind} {hrefFor} mode="hero" />
@@ -266,7 +251,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 34px 0 34px 40px;
+    padding: 34px 24px 34px 40px;
   }
   h1 {
     margin: 0;
@@ -297,49 +282,6 @@
     font-size: 0.75rem;
     font-weight: 700;
     vertical-align: 2px;
-  }
-  .session {
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    width: fit-content;
-    max-width: 100%;
-    padding: 14px 24px;
-    border-radius: 16px;
-    border: 1px solid rgba(246, 166, 35, 0.55);
-    background: linear-gradient(135deg, rgba(60, 38, 8, 0.75), rgba(26, 22, 18, 0.65));
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  }
-  .session-label {
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 0.95rem;
-  }
-  .session-time {
-    font-size: 2.3rem;
-    font-weight: 700;
-    line-height: 1.05;
-    background: linear-gradient(180deg, #ffc65c, #f39a1d);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    white-space: nowrap;
-  }
-  .session-range {
-    padding-left: 22px;
-    border-left: 1px solid rgba(255, 255, 255, 0.18);
-    font-size: 1.75rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .session-range span {
-    font-size: 0.6em;
-    color: var(--muted);
-  }
-  .session-none {
-    color: var(--muted);
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-top: 2px;
   }
   .island-hero {
     position: relative;
@@ -516,19 +458,6 @@
     .date {
       margin: 6px 0 14px;
       font-size: 1rem;
-    }
-    .session {
-      width: 100%;
-      justify-content: space-between;
-      padding: 12px 18px;
-      gap: 14px;
-    }
-    .session-time {
-      font-size: 1.9rem;
-    }
-    .session-range {
-      font-size: 1.4rem;
-      padding-left: 14px;
     }
     .forecast {
       padding: 14px 12px 12px;

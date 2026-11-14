@@ -125,7 +125,7 @@ def test_archives_complete_runs_waits_for_partial_and_never_refetches(tmp_path):
     files = sorted(p.name for p in (tmp_path / "archive" / "forecast").iterdir())
     assert files == ["2026-11-10T00Z.json", "2026-11-11T00Z.json"]
     rec = json.loads((tmp_path / "archive" / "forecast" / "2026-11-11T00Z.json").read_text())
-    assert rec["hours"] == 163 and set(rec["spots"]) == {"kanaha", "sprecks", "harbor", "maui-sunset", "keawakapu"}
+    assert rec["hours"] == 163 and set(rec["spots"]) == {"kanaha", "sprecks", "harbor", "hookipa", "maui-sunset", "keawakapu"}
     assert len(fetch.urls) == 1 + 3 * len(SPOTS)  # catalog + 3 runs x every spot
 
     # Next pass: archived runs aren't fetched again; the partial one is retried.
