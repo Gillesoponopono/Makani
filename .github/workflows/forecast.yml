@@ -1,16 +1,17 @@
 name: Forecast data
 
-# Every 6 h (18:00, 00:00, 06:00, 12:00 HST):
-#  - rebuilds the WRF forecast JSON when a new model run is out, and archives
-#    that run (archive/forecast/) since it can never be fetched again later;
-#  - merges the last 7 days of observed wind (Kahului Harbor + Airport) into
-#    archive/obs/.
+# Hourly light check (one ~13 KB request to ERDDAP). Heavier work only when needed:
+#  - new WRF run complete -> rebuild the site's forecast JSON and archive the
+#    run exactly as issued from PacIOOS THREDDS (archive/forecast/);
+#  - every ~6 h -> merge the last 7 days of observed wind (Kahului Harbor +
+#    Airport) into archive/obs/.
 # When anything changed it force-pushes the data dir to the orphan `data`
 # branch (one commit, so git history never grows; archive files accumulate)
-# and redeploys the site.
+# and redeploys the site. Run manually with large forecast_days / obs_days to
+# backfill history.
 on:
   schedule:
-    - cron: "0 4,10,16,22 * * *"
+    - cron: "7 * * * *"  # minute 7: away from the top-of-hour rush
   workflow_dispatch:
     inputs:
       force:
@@ -21,6 +22,10 @@ on:
         description: Days of observations to fetch (e.g. 400 to backfill Kahului Harbor history)
         type: number
         default: 7
+      forecast_days:
+        description: Archive missing forecast runs from the last N days (e.g. 400 to backfill; ~20 min)
+        type: number
+        default: 10
 
 permissions:
   contents: write
@@ -35,7 +40,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120  # only a manual backfill takes long; hourly runs take ~30 s
     outputs:
       changed: ${{ steps.build.outputs.changed }}
     steps:
@@ -70,7 +75,12 @@ jobs:
       - name: Build forecast JSON
         id: build
         working-directory: pipeline
-        run: python -m makani.build --out ../data --obs-days ${{ inputs.obs_days || 7 }} ${{ inputs.force && '--force' || '' }}
+        run: >-
+          python -m makani.build --out ../data
+          --forecast-days ${{ inputs.forecast_days || 10 }}
+          --obs-days ${{ inputs.obs_days || 7 }}
+          ${{ github.event_name == 'schedule' && '--obs-every-hours 6' || '' }}
+          ${{ inputs.force && '--force' || '' }}
 
       - name: Publish to data branch
         if: steps.build.outputs.changed == 'true'
@@ -87,7 +97,7 @@ jobs:
           git add -A
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -q -m "Forecast data, WRF run ending $(jq -r '.wrf.coverageEnd' meta.json)"
+              commit -q -m "Forecast data, WRF run ending $(jq -r '.wrf.coverageEnd' meta.json), $(jq '.forecastRuns | length' archive/index.json) archived runs"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
 
       # Scheduled workflows in public repos are disabled after 60 days without
@@ -96,7 +106,9 @@ jobs:
         if: github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/forecast.yml/enable" || true
+        run: |
+          [ "$(date -u +%H)" = "04" ] || exit 0  # once a day is plenty
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/forecast.yml/enable" || true
 
   deploy:
     needs: fetch

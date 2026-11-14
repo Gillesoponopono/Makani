@@ -1,15 +1,21 @@
 """Build the static forecast JSON consumed by the site.
 
 Usage:
-    python -m makani.build --out web/public/data [--force] [--obs-days N | --skip-obs]
+    python -m makani.build --out web/public/data [--force]
+        [--forecast-days N] [--obs-days N] [--obs-every-hours H] [--skip-obs]
 
-1. WRF forecast: rebuilt only when a new model run is out; each run is also
-   archived (archive/forecast/<run>.json).
-2. Observations: last N days (default 7) merged into archive/obs/ every time.
-   Use a large N once to backfill Kahului Harbor history (NWS keeps 7 days).
+Designed to run hourly as a cheap check:
+1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end;
+   the spot JSON is rebuilt only when it changes, i.e. a new run is complete.
+2. Forecast archive (THREDDS): when a new run is out (or with --force, or a
+   non-default --forecast-days for backfill), every complete run of the last
+   N days that isn't archived yet is saved exactly as issued.
+3. Observations: the last N days are merged into archive/obs/, at most every
+   H hours (--obs-every-hours; 0 = every time). A large --obs-days backfills
+   Kahului Harbor history (NWS keeps only 7 days).
 
-Exits 0 when the forecast is fine (an observation source failing is only a
-warning); writes `changed=true|false` to $GITHUB_OUTPUT when set.
+Exits 0 when the site forecast is fine (archive and observation failures are
+warnings); writes `changed=true|false` to $GITHUB_OUTPUT when set.
 """
 
 from __future__ import annotations
@@ -21,9 +27,10 @@ from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 
-from . import SCHEMA_VERSION, archive, erddap, obs
+from . import SCHEMA_VERSION, archive, erddap, obs, thredds
 from .config import load_ratings, load_spots, local_tz
 from .jsonio import read_json, write_json_atomic
+from .net import FetchError
 from .ratings import classify_sector, display_kn, ms_to_kn, sports_for, uv_to_speed_dir
 from .sun import sun_times
 from .validate import validate_meta, validate_spot
@@ -147,9 +154,7 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
     }
     validate_meta(meta, [d["id"] for d in docs])
 
-    # Archive first (it's the one thing we can never re-fetch), then spot files,
-    # meta last so meta never references data that isn't there.
-    archive.save_forecast(out_dir, meta, docs)
+    # Spot files first, meta last, so meta never references data that isn't there.
     for doc in docs:
         write_json_atomic(out_dir / "spots" / f"{doc['id']}.json", doc)
     write_json_atomic(out_dir / "meta.json", meta)
@@ -157,30 +162,63 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
     return True
 
 
+DEFAULT_FORECAST_DAYS = 10
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True, help="output directory (e.g. web/public/data)")
     ap.add_argument("--force", action="store_true", help="rebuild even if the model run is unchanged")
+    ap.add_argument("--forecast-days", type=float, default=DEFAULT_FORECAST_DAYS,
+                    help="archive missing THREDDS runs from the last N days (e.g. 400 to backfill)")
     ap.add_argument("--obs-days", type=float, default=obs.NWS_MAX_DAYS,
                     help="days of observations to (re)fetch; large values backfill CO-OPS history")
+    ap.add_argument("--obs-every-hours", type=float, default=0,
+                    help="skip observations if they were checked less than H hours ago (0 = always)")
     ap.add_argument("--skip-obs", action="store_true", help="don't fetch observations")
     args = ap.parse_args(argv)
 
     now = datetime.now(timezone.utc)
+    spots_cfg = load_spots()
+    tz = local_tz(spots_cfg)
+
+    # 1. Site forecast (cheap check; full fetch only for a new run).
     forecast_changed = build(args.out, force=args.force, now=now)
 
+    # 2. Forecast archive.
+    migrated = archive.migrate_legacy(args.out)
+    if migrated:
+        print(f"Removed {migrated} legacy forecast archive file(s)")
+    fc_status = None
+    no_runs_yet = not any((args.out / "archive" / "forecast").glob("*.json"))
+    if forecast_changed or args.force or args.forecast_days != DEFAULT_FORECAST_DAYS or no_runs_yet:
+        try:
+            fc_status = thredds.update_forecast_archive(args.out, spots_cfg["spots"], tz, now,
+                                                        days=args.forecast_days)
+        except FetchError as exc:
+            fc_status = {"status": "error", "error": str(exc)[:300], "added": 0}
+            print(f"::warning::forecast archive failed: {exc}")
+
+    # 3. Observations.
     obs_updated = 0
     obs_status: dict[str, Any] = {}
-    if not args.skip_obs:
-        spots_cfg = load_spots()
+    ago = archive.obs_checked_hours_ago(args.out, now)
+    due = args.obs_every_hours <= 0 or ago is None or ago >= args.obs_every_hours - 0.5
+    if args.skip_obs:
+        pass
+    elif not due:
+        print(f"Observations checked {ago:.1f} h ago; next check after {args.obs_every_hours:g} h.")
+    else:
         obs_status = obs.update_obs(args.out, spots_cfg.get("observationStations", []),
-                                    local_tz(spots_cfg), now, days=args.obs_days)
+                                    tz, now, days=args.obs_days)
         obs_updated = sum(s.get("updated", 0) for s in obs_status.values())
-    index = archive.write_index(args.out, obs_status=obs_status, now=now)
+
+    index = archive.write_index(args.out, obs_status=obs_status, forecast_status=fc_status, now=now)
     print(f"Archive: {len(index['forecastRuns'])} forecast runs, "
           f"obs months {', '.join(f'{k}: {len(v)}' for k, v in index['obs'].items()) or 'none'}")
 
-    changed = forecast_changed or obs_updated > 0
+    runs_added = (fc_status or {}).get("added", 0)
+    changed = forecast_changed or runs_added > 0 or migrated > 0 or obs_updated > 0
     gh_out = os.environ.get("GITHUB_OUTPUT")
     if gh_out:
         with open(gh_out, "a", encoding="utf-8") as fh:

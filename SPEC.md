@@ -5,7 +5,7 @@
 A free, mobile-first wind forecast website for kitesurfers, wing foilers and kite foilers on Maui. It turns the PacIOOS high-resolution WRF model into a plain answer to "is it on, and for what gear?" for each spot, adds National Weather Service (NWS) data as a second opinion, and sends optional alerts by email or browser push.
 
 - **Hosting:** static site on GitHub Pages — `https://gillesoponopono.github.io/Makani/` (public repo `Gillesoponopono/Makani`)
-- **Data refresh:** GitHub Actions, every 6 hours, publishes JSON only when there is a new model run
+- **Data refresh:** GitHub Actions, an hourly light check (~13 KB); full download and republish only when a new model run is complete, observations every ~6 h
 - **Alerts backend:** one small Cloudflare Worker (free tier), the only server-side piece
 - **Cost target:** $0/month
 
@@ -42,9 +42,10 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 
 | Source | What | Where it's fetched | Refresh |
 |---|---|---|---|
-| **PacIOOS WRF `wrf_mo`** (ERDDAP griddap) | 10 m wind U/V, air temp, rain, ~2 km grid, hourly | GitHub Action | every 6 h, skipped if no new run |
+| **PacIOOS WRF `wrf_mo`** (ERDDAP griddap) | 10 m wind U/V, air temp, rain, ~2 km grid, hourly — the site's current forecast | GitHub Action | hourly check, full fetch only for a new complete run |
+| **PacIOOS WRF individual runs** (THREDDS `wrf_mo/runs`, NCSS point CSV) | Every run since 2010-05-14, exactly as issued | GitHub Action → forecast archive | when a new run is complete; one-off backfill |
 | **NWS gridpoint raw forecast** (`api.weather.gov/gridpoints/HFO/x,y`) | Hourly wind speed, **gusts** and direction per spot (second opinion) | GitHub Action | every 6 h |
-| **NOAA CO-OPS Kahului Harbor wind** (station `1615680`, `product=wind`) | Measured wind, direction, gusts on the waterfront, 6-min data, **years of history** | GitHub Action → observation archive | every 6 h (last 7 days re-merged); one-off backfill |
+| **NOAA CO-OPS Kahului Harbor wind** (station `1615680`, `product=wind`) | Measured wind, direction, gusts on the waterfront, 6-min data, **years of history** | GitHub Action → observation archive | every ~6 h (last 7 days re-merged); one-off backfill |
 | **NWS observations** (`/stations/PHOG/observations`) | Measured wind and gusts at Kahului Airport (ASOS) | **Browser, live** for "now" (API sends `Access-Control-Allow-Origin: *`), plus the Action → observation archive | on page load / every 10 min while open; Action every 6 h |
 | **NWS active alerts** (`/alerts/active?zone=…`) | Wind Advisory, Small Craft Advisory, High Surf, etc. | Browser live + Action (for alert emails) | on page load / every 6 h |
 | **NWS Coastal Waters Forecast** (`/products/types/CWF/locations/HFO`) | Marine text for zones `PHZ117` Maui County Windward Waters and `PHZ119` Maalaea Bay | GitHub Action | every 6 h |
@@ -57,6 +58,8 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 - Grid: lat 20.2–21.892 (step 0.018°, 95 rows), lon −159.12 to −155.64 (step 0.02°, 175 cols) ≈ 2 km.
 - Variables used: `Uwind`, `Vwind` (m/s, 10 m), `Tair` (°C, 2 m), `rain` (kg m⁻² s⁻¹ = mm/s).
 - Time: hourly. It is an FMRC "best" time series: the past stretches back to 2010 and the future to the end of the latest run (currently ~5 days ahead; the metadata says up to 7). **There is no run ID**, so a new run is detected from `time_coverage_end` (see §7.2).
+- **Runs** (checked 2026-11-13 on THREDDS `catalog/wrf_mo/runs/catalog.xml`, 5,578 runs): one per day, initialised **00Z** (14:00 HST the day before), valid from +6 h to **+168 h**; some days are missing (e.g. 2026-11-06, -09). Runs land slowly: on 2026-11-14 01Z the 11-12 run had 67 of 163 hours online and the 11-11 run was the newest complete one. ERDDAP's `time_coverage_end` = latest complete run + 168 h, so it changes once per completed run.
+- **Individual runs are kept forever** on THREDDS: one NCSS point request per run and spot (`/thredds/ncss/grid/wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_<init>?var=Uwind&var=Vwind&latitude=…&longitude=…&temporal=all&accept=csv`) returns the 163 hourly values in ~1 s / ~12 KB, including runs from years ago.
 - **No gust variable** (see §5.3).
 - License: free use and redistribution, no warranty. Attribution to PacIOOS / UH (Yi-Leng Chen) is required.
 - **The server is slow**: queries over the 142k-step time axis can take minutes. Always bound the time range explicitly, use long timeouts (300 s) and retries with backoff, and never block the site on it.
@@ -68,7 +71,7 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 | **Kahului Airport** NWS `PHOG` | ~1 km inland (20.8925, −156.437) | ASOS, ~hourly at :54 (+ specials); km/h → kn; gust only when reported | **API keeps ~7 days only** | recent values often arrive empty (QC `Z`) and get filled later; usually reads lower than on the water |
 | **Kīhei** | — | no free official station found | — | Maui Sunset has no observed reference yet; Synoptic/MesoWest (free key) to investigate |
 
-Because the NWS API forgets after a week, and because the ERDDAP "best" series overwrites past hours with newer model analysis, **both the observations and every forecast run must be archived by us as they come in** (§7.6). Forecasts can't be recovered later; Harbor observations can be backfilled.
+The NWS API forgets after a week, and the ERDDAP "best" series overwrites past hours with newer model analysis, so we keep our own archive (§7.6). Both halves can be backfilled: **PacIOOS THREDDS keeps every individual WRF run since 2010** (§3.1), and Kahului Harbor keeps years of observations. Only PHOG is limited to 7 days.
 
 ### 3.3 NWS facts (checked 2026-11-13)
 - Forecast office: **HFO** (Honolulu).
@@ -150,7 +153,7 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
 
 ```
                  ┌──────────────── GitHub ────────────────┐
-  PacIOOS ERDDAP │  Action: forecast.yml (cron every 6 h)  │
+  PacIOOS ERDDAP │  Action: forecast.yml (hourly check)     │
   NWS API ──────▶│   Python pipeline → JSON                │
   NOAA CO-OPS    │   ├─ force-push → `data` branch          │
                  │   ├─ build Svelte app + data → Pages     │
@@ -171,13 +174,13 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
 
 ### 7.1 Schedule
 `.github/workflows/forecast.yml`
-- `cron: "0 4,10,16,22 * * *"` → **18:00, 00:00, 06:00, 12:00 HST**. GitHub cron can run 5–60 min late, so nothing depends on exact timing.
+- `cron: "7 * * * *"`: an **hourly light check** (one ~13 KB ERDDAP request). The full download runs only when a new run is complete (about once a day); observations are refreshed at most every 6 h (`--obs-every-hours 6`), so the site redeploys ~5 times a day rather than 24. GitHub cron can run 5–60 min late, so nothing depends on exact timing.
 - `workflow_dispatch` for manual runs.
 - `concurrency: forecast` (no overlapping runs).
-- Scheduled workflows on public repos are disabled after 60 days without repo activity. Add a keepalive step (an empty monthly commit to `main`, or a keepalive action) and document it.
+- Scheduled workflows on public repos are disabled after 60 days without repo activity; once a day the job re-enables itself through the API, which resets that timer.
 
 ### 7.2 Steps
-1. **Detect new run:** read `time_coverage_end` from `erddap/info/wrf_mo/index.csv`. If it equals `meta.json.wrf.coverageEnd` on the `data` branch, skip the WRF fetch. NWS, tides and alerts still run.
+1. **Detect new run:** read `time_coverage_end` from `erddap/info/wrf_mo/index.csv` (~13 KB, 0.2 s). If it equals `meta.json.wrf.coverageEnd` on the `data` branch, skip the WRF fetch. When it changes, also scan THREDDS and archive every complete run of the last 10 days that isn't archived yet (`makani/thredds.py`). NWS, tides and alerts run on their own cadence.
 2. **Fetch WRF** with small, bounded ERDDAP **`.json`** requests, parsed with the Python standard library (no numpy/xarray needed; measured 2026-11-13: one spot ≈ 2 s / 7 KB, the stride-2 map box ≈ 4 s / 2.4 MB):
    - Spots: `Uwind,Vwind,Tair,rain` at each spot's cell, from **local midnight HST** → `last` (so "today" shows all 24 hours; past hours come from the model analysis).
    - Map (M2): `Uwind,Vwind` over the Maui box lat **20.50–21.10**, lon **−156.72 to −155.95**, stride 2.
@@ -236,16 +239,18 @@ Sectors and sports are computed in the pipeline (one implementation, also used b
 - Budget: ≤ 400 KB raw for the whole run (Pages serves it gzipped). If it grows past that, split into per-day files.
 
 ### 7.6 Archive formats (implemented in M1)
-**Forecast run** — `archive/forecast/<run>.json`, ~5 KB, one per WRF run (run id = `time_coverage_end` → `2026-11-18T00Z`):
+**Forecast run** — `archive/forecast/<run>.json`, ~4 KB, one per WRF run, fetched from THREDDS exactly as issued (run id = init time):
 ```jsonc
 {
-  "run": "2026-11-18T00Z", "coverageEnd": "2026-11-18T00:00:00Z",
-  "fetchedAt": "2026-11-14T00:30:00Z",   // when we first saw it; lead time = t − fetchedAt
-  "start": "2026-11-13T00:00:00-10:00", "hours": 111,
+  "run": "2026-11-11T00Z", "init": "2026-11-11T00:00:00Z", "source": "thredds",
+  "start": "2026-11-10T20:00:00-10:00", "end": "2026-11-17T14:00:00-10:00", "hours": 163,
   "spots": { "kanaha": { "kn": [18.7, …], "dir": [74, …] }, "sprecks": {…}, "maui-sunset": {…} }
 }
 ```
-Hours before `fetchedAt` were already in the past (model analysis), so they don't count as forecasts. A re-fetch of the same run (`--force`) keeps the original `fetchedAt`.
+- Hourly arrays from `start` on a shared axis, `null` where a value is missing.
+- **Lead time = valid time − `init`**, exact, so the History page can compare D-0/D-1/D-2… forecasts honestly.
+- A run is archived only once complete (+168 h online), or once it's 3 days old (it'll never complete). Archived runs are immutable and never re-fetched. Several THREDDS errors in a row stop the pass; the next one resumes.
+- The M1 records (named by ERDDAP coverage end, without `init`) are removed by `archive.migrate_legacy`.
 
 **Observations** — `archive/obs/<station>/<YYYY-MM>.json`, ~35 KB per station-month:
 ```jsonc
@@ -255,9 +260,12 @@ Hours before `fetchedAt` were already in the past (model analysis), so they don'
 - Hour keys are HST. Each hour is the **centred** bin [H−30 min, H+30 min), matching WRF's instantaneous hourly values (PHOG's 13:54 report → 14:00).
 - `kn` = mean, `gust` = max (null if none reported), `dir` = speed-weighted vector mean (wraps correctly around north), `n` = samples.
 - Merge rule: an hour is replaced only by a bin with at least as many samples, so a partial bin at the edge of a fetch window never overwrites a complete one, while late QC fills and corrections still get in.
-- Sizes: ~2 MB/year for forecasts + ~1 MB/year for observations.
+- Sizes: ~1.5 MB/year for forecasts + ~1 MB/year for observations.
 
-**Backfill:** run the Forecast workflow manually with `obs_days` = e.g. 400 to load past Kahului Harbor data (requests are split into 30-day chunks). PHOG can't be backfilled beyond 7 days.
+**Backfill:** run the Forecast workflow manually with `forecast_days` and `obs_days` = e.g. 400:
+- Forecasts: ~3 requests per run (one per spot), ~0.2 s pause between requests: ~1,100 requests and ~15–20 min for a year.
+- Kahului Harbor: requests split into 30-day chunks, ~13 requests for a year.
+- PHOG can't be backfilled beyond 7 days.
 
 ---
 
@@ -383,7 +391,7 @@ Makani/
 │  └─ wrangler.toml
 └─ .github/workflows/
    ├─ ci.yml                    # lint + tests (pipeline, web, worker) on PRs
-   ├─ forecast.yml              # cron pipeline + deploy + alerts
+   ├─ forecast.yml              # hourly check: pipeline + archive + deploy + alerts
    └─ deploy.yml                # on push to main: build with data branch → Pages
 ```
 
@@ -421,10 +429,10 @@ Makani/
 
 | # | Deliverable |
 |---|---|
-| M1 | Repo, CI, `config/spots.json`, WRF pipeline → `spots/*.json`, data branch, Pages deploy of a bare hourly table, **forecast-run archive + observed-wind archive (Kahului Harbor, PHOG)** so history starts accumulating from day one |
+| M1 | Repo, CI, `config/spots.json`, WRF pipeline → `spots/*.json`, data branch, Pages deploy of a bare hourly table, **forecast archive (every THREDDS run, backfilled a year) + observed-wind archive (Kahului Harbor backfilled, PHOG)**, hourly light check |
 | M2 | Coastline asset, SVG map with arrows, time slider |
 | M3 | Ratings: sport icons, direction sectors and warnings, estimated gusts, unit toggle, light/dark, mobile layout |
-| M4 | NWS gridpoint, live observations, advisories, marine text, tides, sunrise/sunset, accuracy panel, **History page (forecast vs observed, §8.6)**, Harbor history backfill |
+| M4 | NWS gridpoint, live observations, advisories, marine text, tides, sunrise/sunset, accuracy panel, **History page (forecast vs observed, §8.6)** |
 | M5 | Worker + D1, email signup with double opt-in, alert matching, Resend emails |
 | M6 | PWA service worker, Web Push subscribe/send/prune |
 | M7 | Polish: custom icons, performance budget, accessibility pass, About page, launch |

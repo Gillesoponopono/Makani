@@ -104,30 +104,3 @@ def test_missing_values_are_skipped():
     assert doc["hours"][0]["wrf"]["tairC"] is None
     assert doc["hours"][0]["wrf"]["rainMmH"] is None
 
-
-def test_new_run_is_archived_once_with_original_fetch_time(tmp_path):
-    from makani import archive
-
-    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
-    path = tmp_path / "archive" / "forecast" / "2026-11-18T00Z.json"
-    rec = json.loads(path.read_text())
-    assert rec["fetchedAt"] == "2026-11-14T00:30:00Z"
-    assert rec["start"] == "2026-11-13T00:00:00-10:00"
-    assert set(rec["spots"]) == {"kanaha", "sprecks", "maui-sunset"}
-    assert len(rec["spots"]["kanaha"]["kn"]) == rec["hours"] == 98
-
-    later = NOW + timedelta(hours=6)
-    build_mod.build(tmp_path, now=later, fetch=FakeFetch(), force=True)
-    assert json.loads(path.read_text())["fetchedAt"] == "2026-11-14T00:30:00Z"
-
-    build_mod.build(tmp_path, now=later, fetch=FakeFetch(end="2026-11-19T00:00:00Z"))
-    index = archive.write_index(tmp_path, obs_status={"PHOG": {"status": "ok", "updated": 3}}, now=later)
-    assert [r["run"] for r in index["forecastRuns"]] == ["2026-11-18T00Z", "2026-11-19T00Z"]
-    assert index["obsStatus"]["PHOG"]["lastOkAt"] == "2026-11-14T06:30:00Z"
-    assert archive.count_files(tmp_path) == 2
-
-    # A failed check keeps the last good time.
-    index = archive.write_index(tmp_path, obs_status={"PHOG": {"status": "error", "error": "x"}},
-                                now=later + timedelta(hours=6))
-    assert index["obsStatus"]["PHOG"]["status"] == "error"
-    assert index["obsStatus"]["PHOG"]["lastOkAt"] == "2026-11-14T06:30:00Z"

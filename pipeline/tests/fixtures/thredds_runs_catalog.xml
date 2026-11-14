@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0" xmlns:xlink="http://www.w3.org/1999/xlink" name="Atmosphere Model Output/Hawaii/WRF Maui-Oahu Regional Atmospheric Model" version="1.0.1">
+  <service name="VirtualServices" serviceType="Compound" base="">
+    <service name="opendap" serviceType="OPENDAP" base="/thredds/dodsC/" />
+    <service name="ncss" serviceType="NetcdfSubset" base="/thredds/ncss/" />
+    <service name="wms" serviceType="WMS" base="/thredds/wms/" />
+    <service name="wcs" serviceType="WCS" base="/thredds/wcs/" />
+    <service name="iso" serviceType="ISO" base="/thredds/iso/" />
+    <service name="ncml" serviceType="NCML" base="/thredds/ncml/" />
+  </service>
+  <dataset name="Forecast Model Run">
+    <metadata inherited="true">
+      <serviceName>VirtualServices</serviceName>
+      <authority>org.pacioos</authority>
+      <dataType>GRID</dataType>
+      <dataFormat>netCDF</dataFormat>
+      <documentation type="summary">Weather Research and Forecasting (WRF) mesoscale numerical weather prediction model 7-day hourly forecast for the region surrounding the Hawaiian islands of Oahu, Maui, Molokai, Lanai, and Kahoolawe at approximately 2-km resolution. Uses the Advanced Research WRF (ARW) dynamical solver developed and maintained by the Mesoscale and Microscale Meteorology Division of the National Center for Atmospheric Research (NCAR). Model runs produced at the University of Hawaii by Yi-Leng Chen.</documentation>
+      <documentation type="rights">These model data were generated as part of an academic research project, and the principal investigator, Yi-Leng Chen (yileng@hawaii.edu), asks to be informed of intent for scientific use and appropriate acknowledgment given in any publications arising therefrom. The data are provided free of charge, without warranty of any kind.</documentation>
+      <documentation type="funding">The Pacific Islands Ocean Observing System (PacIOOS), funded through the National Oceanic and Atmospheric Administration (NOAA), is a Regional Association within the U.S. Integrated Ocean Observing System (IOOS). PacIOOS is coordinated by the University of Hawaii School of Ocean and Earth Science and Technology (SOEST).</documentation>
+      <documentation xlink:href="http://pacioos.org/weather/model-wind-mauioahu/" xlink:title="PacIOOS WRF Maui-Oahu" />
+      <documentation xlink:href="http://www.soest.hawaii.edu/MET/Faculty/wrf/arw/" xlink:title="WRF-ARW Simulations for the Hawaiian Islands" />
+      <documentation xlink:href="https://www.mmm.ucar.edu/weather-research-and-forecasting-model" xlink:title="Weather Research and Forecasting (WRF) Modeling System" />
+      <documentation xlink:href="http://www2.mmm.ucar.edu/wrf/users/" xlink:title="UCAR/NCAR Advanced Research WRF (ARW)" />
+      <creator>
+        <name>Yi-Leng Chen</name>
+        <contact url="http://www.soest.hawaii.edu/MET/Faculty/chen/chen_index.html" email="yileng@hawaii.edu" />
+      </creator>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Atmospheric Pressure &gt; Surface Pressure</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Atmospheric Radiation &gt; Longwave Radiation</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Atmospheric Radiation &gt; Shortwave Radiation</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Atmospheric Temperature &gt; Surface Air Temperature</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Atmospheric Water Vapor &gt; Humidity</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Atmospheric Winds &gt; Surface Winds</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science &gt; Atmosphere &gt; Precipitation &gt; Rain</keyword>
+      <keyword vocabulary="GCMD Science Keywords">Earth Science Services &gt; Models &gt; Weather Research/Forecast Models</keyword>
+      <project>Pacific Islands Ocean Observing System (PacIOOS)</project>
+      <project>U.S. Integrated Ocean Observing System (IOOS)</project>
+      <property name="viewer" value="http://pacioos.org/voyager/index.html?b=19.764119%2C-159.721985%2C22.413568%2C-155.039063&amp;t=h&amp;o=wfore:1:f:d3,PacIOOS Voyager (Google Maps API)" />
+      <property name="viewer2" value="http://pacioos.org/weather/model-wind-mauioahu/,PacIOOS website" />
+      <property name="viewer3" value="https://pae-paha.pacioos.hawaii.edu/erddap/griddap/wrf_mo,ERDDAP" />
+      <publisher>
+        <name>Pacific Islands Ocean Observing System (PacIOOS)</name>
+        <contact url="http://pacioos.org" email="info@pacioos.org" />
+      </publisher>
+      <geospatialCoverage>
+        <northsouth>
+          <start>20.200000762939453</start>
+          <size>1.6919994354248047</size>
+          <units>degrees_north</units>
+        </northsouth>
+        <eastwest>
+          <start>-159.1199951171875</start>
+          <size>3.4799957275390625</size>
+          <units>degrees_east</units>
+        </eastwest>
+      </geospatialCoverage>
+      <timeCoverage>
+        <start>2010-05-14T12:00:00Z</start>
+        <end>present</end>
+        <resolution>1 hour</resolution>
+      </timeCoverage>
+      <variables vocabulary="CF-1.0">
+        <variable name="Pair" vocabulary_name="surface_air_pressure" units="millibar" vocabulary_id="">surface air pressure</variable>
+        <variable name="Qair" vocabulary_name="relative_humidity" units="%" vocabulary_id="">surface air relative humidity</variable>
+        <variable name="Tair" vocabulary_name="air_temperature" units="Celsius" vocabulary_id="">air temperature at 2m</variable>
+        <variable name="Uwind" vocabulary_name="eastward_wind" units="meter second-1" vocabulary_id="">u-wind component at 10m</variable>
+        <variable name="Vwind" vocabulary_name="northward_wind" units="meter second-1" vocabulary_id="">v-wind component at 10m</variable>
+        <variable name="lwrad_down" vocabulary_name="surface_net_downward_longwave_flux" units="Watts meter-2" vocabulary_id="">net longwave radiation flux</variable>
+        <variable name="rain" vocabulary_name="precipitation_flux" units="kilogram meter-2 second-1" vocabulary_id="">rainfall rate</variable>
+        <variable name="swrad" vocabulary_name="surface_downwelling_shortwave_flux" units="Watts meter-2" vocabulary_id="">solar shortwave radiation flux</variable>
+      </variables>
+    </metadata>
+    <dataset name="WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-12T00:00:00Z" ID="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-12T00:00:00Z" urlPath="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-12T00:00:00Z">
+      <documentation type="summary">Data from Run WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-12T00:00:00Z</documentation>
+      <timeCoverage>
+        <start>2026-11-12T06:00:00Z</start>
+        <end>2026-11-15T00:00:00Z</end>
+      </timeCoverage>
+    </dataset><dataset name="WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-11T00:00:00Z" ID="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-11T00:00:00Z" urlPath="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-11T00:00:00Z">
+      <documentation type="summary">Data from Run WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-11T00:00:00Z</documentation>
+      <timeCoverage>
+        <start>2026-11-11T06:00:00Z</start>
+        <end>2026-11-18T00:00:00Z</end>
+      </timeCoverage>
+    </dataset><dataset name="WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-10T00:00:00Z" ID="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-10T00:00:00Z" urlPath="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-10T00:00:00Z">
+      <documentation type="summary">Data from Run WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2026-11-10T00:00:00Z</documentation>
+      <timeCoverage>
+        <start>2026-11-10T06:00:00Z</start>
+        <end>2026-11-17T00:00:00Z</end>
+      </timeCoverage>
+    </dataset>
+<dataset name="WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2010-05-14T00:00:00Z" ID="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2010-05-14T00:00:00Z" urlPath="wrf_mo/runs/WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2010-05-14T00:00:00Z">
+      <documentation type="summary">Data from Run WRF_Maui-Oahu_Regional_Atmospheric_Model_RUN_2010-05-14T00:00:00Z</documentation>
+      <timeCoverage>
+        <start>2010-05-14T12:00:00Z</start>
+        <end>2010-05-17T12:00:00Z</end>
+      </timeCoverage>
+    </dataset>
+  </dataset>
+</catalog>
