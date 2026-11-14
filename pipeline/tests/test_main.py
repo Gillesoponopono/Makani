@@ -5,14 +5,19 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from makani import archive, build as build_mod, obs, thredds
+from makani.jsonio import write_json_atomic
+from makani.net import FetchError
 
 
 @pytest.fixture
 def calls(monkeypatch, tmp_path):
-    rec = {"build": 0, "thredds": [], "obs": 0, "new_run": False, "obs_updated": 2, "runs_added": 1}
+    rec = {"build": 0, "thredds": [], "obs": 0, "new_run": False, "obs_updated": 2, "runs_added": 1,
+           "erddap_down": False}
 
     def fake_build(out, force=False, now=None):
         rec["build"] += 1
+        if rec["erddap_down"]:
+            raise FetchError("Connection timed out")
         return rec["new_run"] or force
 
     def fake_thredds(out, spots, tz, now, days=10, **kw):
@@ -37,9 +42,9 @@ def calls(monkeypatch, tmp_path):
     return rec
 
 
-def run(calls, *extra):
+def run(calls, *extra, expect_rc=0):
     calls["gh_out"].write_text("")
-    build_mod.main(["--out", str(calls["out"]), *extra])
+    assert build_mod.main(["--out", str(calls["out"]), *extra]) == expect_rc
     return calls["gh_out"].read_text().strip()
 
 
@@ -77,3 +82,22 @@ def test_nothing_new_anywhere_is_unchanged(calls):
     calls["obs_updated"] = 0
     calls["runs_added"] = 0
     assert run(calls, "--forecast-days", "400") == "changed=false"
+
+
+def _meta(calls, hours_old):
+    stamp = (datetime.now(timezone.utc) - timedelta(hours=hours_old)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    write_json_atomic(calls["out"] / "meta.json", {"generatedAt": stamp})
+
+
+def test_erddap_outage_keeps_site_and_still_updates_observations(calls):
+    calls["erddap_down"] = True
+    _meta(calls, hours_old=5)
+    assert run(calls) == "changed=true"   # observations still merged
+    assert calls["obs"] == 1 and calls["thredds"] == []
+
+
+def test_erddap_outage_fails_only_when_site_data_is_stale(calls):
+    calls["erddap_down"] = True
+    calls["obs_updated"] = 0
+    _meta(calls, hours_old=30)
+    assert run(calls, expect_rc=1) == "changed=false"

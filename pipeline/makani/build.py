@@ -175,6 +175,7 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
 
 
 DEFAULT_FORECAST_DAYS = 10
+STALE_HOURS = 24  # fail the job only when the published forecast is older than this
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -195,7 +196,15 @@ def main(argv: list[str] | None = None) -> int:
     tz = local_tz(spots_cfg)
 
     # 1. Site forecast (cheap check; full fetch only for a new run).
-    forecast_changed = build(args.out, force=args.force, now=now)
+    # PacIOOS is sometimes unreachable from some GitHub runners (seen 2026-11-14):
+    # keep the published site as is, still update observations, and only fail the
+    # job once the site's data is more than STALE_HOURS old.
+    forecast_error = None
+    try:
+        forecast_changed = build(args.out, force=args.force, now=now)
+    except FetchError as exc:
+        forecast_changed, forecast_error = False, str(exc)
+        print(f"::warning::site forecast not updated, PacIOOS ERDDAP unreachable: {exc}")
 
     # 2. Forecast archive.
     migrated = archive.migrate_legacy(args.out)
@@ -203,7 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Removed {migrated} legacy forecast archive file(s)")
     fc_status = None
     no_runs_yet = not any((args.out / "archive" / "forecast").glob("*.json"))
-    if forecast_changed or args.force or args.forecast_days != DEFAULT_FORECAST_DAYS or no_runs_yet:
+    scan = forecast_changed or args.force or args.forecast_days != DEFAULT_FORECAST_DAYS or no_runs_yet
+    if scan and not forecast_error:
         try:
             fc_status = thredds.update_forecast_archive(args.out, spots_cfg["spots"], tz, now,
                                                         days=args.forecast_days)
@@ -235,6 +245,16 @@ def main(argv: list[str] | None = None) -> int:
     if gh_out:
         with open(gh_out, "a", encoding="utf-8") as fh:
             fh.write(f"changed={'true' if changed else 'false'}\n")
+
+    if forecast_error:
+        meta = read_json(args.out / "meta.json") or {}
+        generated = meta.get("generatedAt")
+        age = ((now - datetime.strptime(generated, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc))
+               .total_seconds() / 3600) if generated else None
+        if age is None or age > STALE_HOURS:
+            print(f"::error::site forecast is {'missing' if age is None else f'{age:.0f} h old'} "
+                  f"and PacIOOS is unreachable")
+            return 1
     return 0
 
 

@@ -196,6 +196,8 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
 
 Each source fails on its own. If NWS is down, WRF still publishes (and the reverse); `meta.json` records each source's status and timestamp.
 
+**PacIOOS outages** (seen 2026-11-14: connection timeouts from some GitHub runners while others got through): the hourly check uses a short timeout (45 s, 2 tries); if ERDDAP is unreachable the published site stays as is, observations are still merged, and the job only **fails once the site's data is more than 24 h old**, so a passing blip doesn't send failure emails every hour. A "Connectivity probe" step logs the runner IP and a `curl` check before each build.
+
 ### 7.3 Output files (`data/`)
 ```
 meta.json            run info, per-source status, generatedAt, schemaVersion

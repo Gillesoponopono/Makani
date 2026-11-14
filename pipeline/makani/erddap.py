@@ -48,7 +48,12 @@ def parse_table(raw: bytes) -> list[dict[str, Any]]:
     return [dict(zip(cols, row)) for row in table["rows"]]
 
 
-def coverage_end(fetch: Fetcher = http_get) -> str:
+def _quick_get(url: str) -> bytes:
+    # The hourly light check shouldn't hang for minutes when the server is unreachable.
+    return http_get(url, timeout=45, retries=2, backoff=10)
+
+
+def coverage_end(fetch: Fetcher = _quick_get) -> str:
     """time_coverage_end of the dataset: changes whenever a new model run lands."""
     raw = fetch(f"{BASE_URL}/info/{DATASET}/index.csv").decode("utf-8", "replace")
     for line in raw.splitlines():
