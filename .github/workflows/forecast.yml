@@ -72,6 +72,14 @@ jobs:
             echo "::error::git ls-remote failed ($rc)"; exit "$rc"
           fi
 
+      # Cheap diagnostics for when PacIOOS is unreachable from some runners.
+      - name: Connectivity probe
+        continue-on-error: true
+        run: |
+          echo "runner ip: $(curl -s -m 10 https://api.ipify.org || echo unknown)"
+          curl -s -o /dev/null -m 20 -w "ERDDAP %{http_code} connect %{time_connect}s\n" \
+            https://pae-paha.pacioos.hawaii.edu/erddap/info/wrf_mo/index.csv || echo "ERDDAP unreachable (curl exit $?)"
+
       - name: Build forecast JSON
         id: build
         working-directory: pipeline
