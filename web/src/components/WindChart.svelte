@@ -1,12 +1,16 @@
 <script lang="ts">
-  // One day of wind for a spot: wind and estimated-gust curves on one axis, the
-  // best session highlighted, and a strip of direction arrows under the time axis.
-  // Below, on the same time axis: a wave strip (3-hour cells with height and
-  // period, the wave type underneath) and a slim tide panel with its highs and lows.
+  // One day of wind for a spot: wind and estimated-gust curves on one axis (plus the
+  // adjusted forecast, dashed, where the spot has one), the best session
+  // highlighted, and a strip of direction arrows under the time axis.
+  // Below, on the same time axis: a sky strip (sun, cloud, showers by hour), a wave
+  // strip (3-hour cells with height and period, the wave type underneath) and a
+  // slim tide panel with its highs and lows.
   // Hover/tap/keyboard selects an hour (`focus`), shared with the map and stats.
   import { areaPath, axisTicks, monotonePath, segments, type Pt } from '../lib/chart'
   import { compass, hourLabel, knBand } from '../lib/format'
   import { arrowPath } from '../lib/map'
+  import { SKY_LABEL, skyIcon } from '../lib/sky'
+  import SkyIcon from './SkyIcon.svelte'
   import {
     WAVE_TYPE,
     lengthUnit,
@@ -76,6 +80,7 @@
   const plotW = $derived(Math.max(0, width - G - R))
   const axisY = $derived(T + plotH)
   const dirY = $derived(axisY + 38)
+  const dirStep = $derived(plotW / 24 >= 16 ? 1 : 2) // arrows and sky icons every hour, or every 2 h when narrow
 
   // Sea rows (full chart only).
   const cells = $derived(compact ? [] : waveCells(hours))
@@ -86,11 +91,17 @@
   const showTide = $derived(!!tday && tday.pts.length > 1)
   const tRange = $derived(tide ? tideRange(tide) : [0, 1])
 
-  const wavesTitleY = $derived(dirY + 34)
+  const showSky = $derived(!compact && hours.some((h) => h?.sky))
+  const skyTitleY = $derived(dirY + 34)
+  const skyY = $derived(skyTitleY + 20) // icon centres
+  const skyEnd = $derived(showSky ? skyY + 12 : dirY + 10)
+  const skySize = $derived(Math.min(19, (plotW / 24) * dirStep * 0.95))
+
+  const wavesTitleY = $derived(showSky ? skyEnd + 26 : dirY + 34)
   const cellY = $derived(wavesTitleY + 8)
   const cellH = 34
   const runY = $derived(cellY + cellH + 15)
-  const wavesEnd = $derived(showWaves ? (sheltered ? cellY + cellH : runY) : dirY + 10)
+  const wavesEnd = $derived(showWaves ? (sheltered ? cellY + cellH : runY) : skyEnd)
   const tideTitleY = $derived(wavesEnd + 30)
   const tideTop = $derived(tideTitleY + 24) // highs are labelled above this line
   const tideH = $derived(width < 560 ? 40 : 50)
@@ -136,6 +147,12 @@
   const tAt = (i: number) => i - 1
   const windRuns = $derived(segments(series, (h, i) => [x(tAt(i)), y(val(h.wrf.kn))] as Pt))
   const gustRuns = $derived(segments(series, (h, i) => [x(tAt(i)), y(val(h.wrf.gustEst))] as Pt))
+  const adjRuns = $derived(
+    segments(
+      series.map((h) => (h && h.wrf.knAdj != null ? h : null)),
+      (h, i) => [x(tAt(i)), y(val(h.wrf.knAdj!))] as Pt,
+    ),
+  )
   const ticks = $derived(axisTicks(yMax))
 
   const bandVar = (kn: number) => `var(--wind-kn${knBand(kn)})`
@@ -178,7 +195,6 @@
   })
   const tickText = (h: number) => `${h % 12 || 12} ${h % 24 < 12 ? 'AM' : 'PM'}`
 
-  const dirStep = $derived(plotW / 24 >= 16 ? 1 : 2)
 
   function pick(e: PointerEvent) {
     if (compact) return
@@ -223,7 +239,7 @@
       role={compact ? 'img' : 'application'}
       aria-label={compact
         ? `${label}: wind and gust`
-        : `${label}: wind and estimated gust in ${windUnitLabel(wind)} by hour${showWaves ? ', waves' : ''}${showTide ? ', tide' : ''}. Left and right arrow keys read each hour.`}
+        : `${label}: wind and estimated gust in ${windUnitLabel(wind)} by hour${showSky ? ', sky' : ''}${showWaves ? ', waves' : ''}${showTide ? ', tide' : ''}. Left and right arrow keys read each hour.`}
       tabindex={compact ? undefined : 0}
       onpointermove={pick}
       onpointerdown={pick}
@@ -294,6 +310,9 @@
         {#each windRuns as run, k (k)}
           <path class="wind" d={monotonePath(run)} stroke="url(#band-{uid})" />
         {/each}
+        {#each adjRuns as run, k (k)}
+          <path class="adj" d={monotonePath(run)} />
+        {/each}
       </g>
 
       {#if nowHours != null && !compact}
@@ -312,6 +331,9 @@
         <line class="cross" x1={x(focus)} x2={x(focus)} y1={T - 4} y2={height - 2} />
         <circle class="dot" cx={x(focus)} cy={y(val(focusHour.wrf.gustEst))} r="4" style:fill="var(--gust)" />
         <circle class="dot" cx={x(focus)} cy={y(val(focusHour.wrf.kn))} r="5" style:fill={bandVar(focusHour.wrf.kn)} />
+        {#if focusHour.wrf.knAdj != null}
+          <circle class="dot adj-dot" cx={x(focus)} cy={y(val(focusHour.wrf.knAdj))} r="4" />
+        {/if}
       {/if}
 
       {#each timeTicks as tk (tk.h)}
@@ -330,6 +352,19 @@
           {#if h && i % dirStep === 0}
             <g transform="translate({x(i)} {dirY}) rotate({h.wrf.dir + 180}) scale({Math.min(15, (plotW / 24) * dirStep * 0.8) / 20})">
               <path class="dir s-{h.sector}" d={arrowPath(20)} />
+            </g>
+          {/if}
+        {/each}
+      {/if}
+
+      {#if showSky}
+        <text class="section" x={G} y={skyTitleY}>Sky</text>
+        {#each hours as h, i (i)}
+          {#if h?.sky && (i % dirStep === 0 || h.sky === 'rain')}
+            <g transform="translate({x(i) - skySize / 2} {skyY - skySize / 2}) scale({skySize / 24})">
+              {#each skyIcon(h.sky) as p, k (k)}
+                <path class="sky-{p.kind}" d={p.d} />
+              {/each}
             </g>
           {/if}
         {/each}
@@ -405,6 +440,9 @@
           <div class="tip-time">{hourLabel(focusHour.t)}</div>
           <div class="row"><span class="key" style:background={bandVar(focusHour.wrf.kn)}></span><strong>{windLabel(focusHour.wrf.kn, wind)} {windUnitLabel(wind)}</strong><span>wind</span></div>
           <div class="row"><span class="key gust"></span><strong>{windLabel(focusHour.wrf.gustEst, wind)} {windUnitLabel(wind)}</strong><span>gust est.</span></div>
+          {#if focusHour.wrf.knAdj != null}
+            <div class="row"><span class="key adj-key"></span><strong>{windLabel(focusHour.wrf.knAdj, wind)} {windUnitLabel(wind)}</strong><span>adjusted</span></div>
+          {/if}
           <div class="row">
             <svg class="s-{focusHour.sector}" viewBox="-12 -12 24 24" width="13" height="13" aria-hidden="true">
               <path d={arrowPath(20)} transform="rotate({focusHour.wrf.dir + 180})" fill="currentColor" />
@@ -428,8 +466,17 @@
               <span>tide{focusTurn ? `, ${focusTurn.type === 'H' ? 'rising' : 'falling'}` : ''}</span>
             </div>
           {/if}
-          {#if focusHour.wrf.tairC != null}
-            <div class="row plain"><strong>{tempLabel(focusHour.wrf.tairC, temp)}</strong><span>air</span></div>
+          {#if focusHour.wrf.tairC != null || focusHour.sky}
+            {@const rain = focusHour.wrf.rainMmH ?? 0}
+            <div class="row" class:plain={!focusHour.sky}>
+              {#if focusHour.sky}<SkyIcon sky={focusHour.sky} size={13} />{/if}
+              {#if focusHour.wrf.tairC != null}<strong>{tempLabel(focusHour.wrf.tairC, temp)}</strong>{/if}
+              <span
+                >{focusHour.wrf.tairC != null ? 'air' : ''}{focusHour.sky
+                  ? `${focusHour.wrf.tairC != null ? ' · ' : ''}${SKY_LABEL[focusHour.sky].toLowerCase()}${rain >= 0.2 ? ` ${rain.toFixed(1)} mm/h` : ''}`
+                  : ''}</span
+              >
+            </div>
           {/if}
         {/if}
       </div>
@@ -516,6 +563,22 @@
     stroke-linejoin: round;
     stroke-linecap: round;
     opacity: 0.85;
+  }
+  .adj {
+    fill: none;
+    stroke: var(--adj);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    stroke-linecap: round;
+    opacity: 0.95;
+  }
+  .adj-dot {
+    fill: var(--adj);
+  }
+  .key.adj-key {
+    height: 0;
+    border-top: 2px dashed var(--adj);
+    border-radius: 0;
   }
   .now {
     stroke: var(--teal);

@@ -36,9 +36,14 @@
   --wind-kn5: #ff6b5e;
   --wind-kn6: #d38cff;
   --gust: #8ea6bb;
+  --adj: #f2f6ff; /* adjusted forecast: dashed, near white */
   /* Sea: wave cells (one hue, stronger with size) and the tide curve. */
   --wave: #38b6e8;
   --tide: #8f9dff;
+  /* Sky icons */
+  --sun: #ffc94d;
+  --cloud: #c3cfdb;
+  --rain: #7ab8ff;
 
   --chart-grid: rgba(150, 195, 235, 0.09);
   --chart-axis: rgba(150, 195, 235, 0.22);
@@ -121,3 +126,25 @@ button {
 .s-ok { color: var(--ok); }
 .s-poor { color: var(--poor); }
 .s-danger { color: var(--danger); }
+
+/* Sky icon parts (lib/sky.ts), used inside the chart's SVG and in SkyIcon.svelte. */
+.sky-sun {
+  fill: var(--sun);
+}
+.sky-ray {
+  fill: none;
+  stroke: var(--sun);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.sky-cloud {
+  fill: var(--cloud);
+  stroke: rgba(6, 18, 31, 0.55);
+  stroke-width: 0.8;
+}
+.sky-drop {
+  fill: none;
+  stroke: var(--rain);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}

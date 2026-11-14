@@ -37,6 +37,18 @@ Fetch live data into the dev site (add `--force` to rebuild an unchanged model r
 cd pipeline && ../.venv/bin/python -m makani.build --out ../web/public/data
 ```
 
+Forecast-error analysis (forecast vs the Kahului Harbor and Airport anemometers, broken down by direction, strength, month, hour, air temperature and cloud cover; downloads and caches its public data):
+
+```bash
+cd pipeline && python3 tools/error_factors.py --work /tmp/makani-errors --csv
+```
+
+Refit the adjusted forecast (writes `config/calibration.json`, same cache):
+
+```bash
+cd pipeline && python3 tools/calibrate.py --work /tmp/makani-errors
+```
+
 ```bash
 cd web && npm install && npm run dev
 ```

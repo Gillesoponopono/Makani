@@ -7,7 +7,8 @@ Usage:
 Designed to run hourly as a cheap check:
 1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end;
    the spot JSON is rebuilt only when it changes, i.e. a new run is complete.
-   A rebuild also adds waves (PacIOOS SWAN + WW3, waves.py), sea temperature
+   A rebuild also adds the adjusted wind (config/calibration.json, adjust.py),
+   waves (PacIOOS SWAN + WW3, waves.py), sea temperature
    (PacIOOS ROMS, water.py) and tides (NOAA CO-OPS, tides.py); those are
    extras and never block the wind.
 2. Forecast archive (THREDDS): when a new run is out (or with --force, or a
@@ -30,15 +31,15 @@ from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 
-from . import SCHEMA_VERSION, archive, erddap, mapframes, obs, thredds, tides, water, waves
-from .config import load_map, load_ratings, load_spots, local_tz
+from . import SCHEMA_VERSION, adjust, archive, erddap, mapframes, obs, sky, thredds, tides, water, waves
+from .config import load_calibration, load_map, load_ratings, load_spots, local_tz
 from .jsonio import read_json, write_json_atomic
 from .net import FetchError
 from .ratings import classify_sector, display_kn, ms_to_kn, sports_for, uv_to_speed_dir
-from .sun import sun_times
+from .sun import cos_zenith, sun_times
 from .validate import validate_meta, validate_spot, validate_extras
 
-WRF_VARIABLES = ("Uwind", "Vwind", "Tair", "rain")
+WRF_VARIABLES = ("Uwind", "Vwind", "Tair", "rain", "swrad")
 
 
 def _iso_z(dt: datetime) -> str:
@@ -74,6 +75,8 @@ def build_spot(spot: dict[str, Any], rows: list[dict[str, Any]], ratings: dict[s
         kn = ms_to_kn(ms)
         sector = classify_sector(deg, spot["sectors"])
         rain = r.get("rain")
+        rain_mm_h = None if rain is None else max(rain, 0.0) * 3600.0
+        sky_cat, sun = sky.hour_sky(r.get("swrad"), rain_mm_h, cos_zenith(t_utc, beach["lat"], beach["lon"]))
         hours.append({
             "t": t_loc.isoformat(),
             "wrf": {
@@ -81,13 +84,16 @@ def build_spot(spot: dict[str, Any], rows: list[dict[str, Any]], ratings: dict[s
                 "dir": deg,
                 "gustEst": round(kn * ratings["gustFactor"], 1),
                 "tairC": _round(r.get("Tair"), 1),
-                "rainMmH": None if rain is None else round(max(rain, 0.0) * 3600.0, 2),
+                "rainMmH": None if rain_mm_h is None else round(rain_mm_h, 2),
             },
+            "sky": sky_cat,
+            "sun": sun,
             "sector": sector,
             "sports": sports_for(display_kn(kn), sector, ratings),
             "daylight": rise <= t_utc <= sset,
         })
 
+    sky.fill_low_sun(hours)
     first = rows[0] if rows else {}
     return {
         "id": spot["id"],
@@ -157,6 +163,11 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
         print(f"{spot['id']}: {len(doc['hours'])} hours from cell "
               f"{doc['wrfCell']['lat']}, {doc['wrfCell']['lon']}")
         docs.append(doc)
+
+    # Adjusted forecast: the model corrected with measured wind, where an anemometer is close.
+    calibration = load_calibration(config_dir)
+    for doc in docs:
+        adjust.apply(calibration, doc)
 
     sport_ids = {b["id"] for b in ratings["sports"]}
     for doc in docs:

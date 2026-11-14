@@ -27,5 +27,31 @@
       473.2,
       703.6
     ]
+  },
+  "stations": {
+    "51205": {
+      "kind": "buoy",
+      "name": "Pauwela buoy (PacIOOS, CDIP 187)",
+      "xy": [
+        622.9,
+        88.5
+      ]
+    },
+    "1615680": {
+      "kind": "anemometer",
+      "name": "Kahului Harbor (NOAA)",
+      "xy": [
+        579.7,
+        267.3
+      ]
+    },
+    "PHOG": {
+      "kind": "anemometer",
+      "name": "Kahului Airport (NWS)",
+      "xy": [
+        632.3,
+        241.6
+      ]
+    }
   }
 }

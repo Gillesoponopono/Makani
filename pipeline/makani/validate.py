@@ -39,9 +39,12 @@ def validate_spot(doc: dict[str, Any], sport_ids: set[str]) -> None:
         _check(0 <= w["kn"] < 120, f"{sid}: implausible wind {w['kn']} kn at {h['t']}")
         _check(0 <= w["dir"] < 360, f"{sid}: bad direction {w['dir']} at {h['t']}")
         _check(w["gustEst"] >= w["kn"], f"{sid}: gust below sustained at {h['t']}")
+        _check(w.get("knAdj") is None or 0 <= w["knAdj"] < 120, f"{sid}: implausible adjusted wind at {h['t']}")
         _check(h["sector"] in SECTORS, f"{sid}: bad sector {h['sector']}")
         _check(set(h["sports"]) <= sport_ids, f"{sid}: unknown sport in {h['sports']}")
         _check(isinstance(h["daylight"], bool), f"{sid}: daylight must be bool")
+        _check(h.get("sky") in (None, "sun", "partly", "cloud", "rain"), f"{sid}: bad sky {h.get('sky')}")
+        _check(h.get("sun") is None or 0 <= h["sun"] < 2, f"{sid}: implausible sunshine ratio {h.get('sun')}")
     _check(len(doc.get("sun", [])) >= 1, f"{sid}: missing sun times")
 
 

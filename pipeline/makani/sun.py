@@ -10,12 +10,8 @@ def _julian_day(d: date) -> float:
     return d.toordinal() + 1721424.5
 
 
-def sun_times(d: date, lat: float, lon: float) -> tuple[datetime, datetime]:
-    """Return (sunrise, sunset) as aware UTC datetimes for the given date and place.
-
-    lon is degrees east (negative for Hawaii). Uses the official zenith 90.833°.
-    """
-    jd = _julian_day(d) + 0.5  # noon UTC
+def _declination_eqtime(jd: float) -> tuple[float, float]:
+    """Sun declination (degrees) and equation of time (minutes) at Julian day jd."""
     t = (jd - 2451545.0) / 36525.0
 
     l0 = (280.46646 + t * (36000.76983 + t * 0.0003032)) % 360
@@ -41,6 +37,15 @@ def sun_times(d: date, lat: float, lon: float) -> tuple[datetime, datetime]:
         - 0.5 * y * y * math.sin(4 * l0r)
         - 1.25 * e * e * math.sin(2 * mr)
     )  # minutes
+    return decl, eq_time
+
+
+def sun_times(d: date, lat: float, lon: float) -> tuple[datetime, datetime]:
+    """Return (sunrise, sunset) as aware UTC datetimes for the given date and place.
+
+    lon is degrees east (negative for Hawaii). Uses the official zenith 90.833°.
+    """
+    decl, eq_time = _declination_eqtime(_julian_day(d) + 0.5)  # noon UTC
 
     latr, declr = math.radians(lat), math.radians(decl)
     cos_ha = (math.cos(math.radians(90.833)) / (math.cos(latr) * math.cos(declr))
@@ -51,3 +56,13 @@ def sun_times(d: date, lat: float, lon: float) -> tuple[datetime, datetime]:
     midnight = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
     return (midnight + timedelta(minutes=solar_noon - 4 * ha),
             midnight + timedelta(minutes=solar_noon + 4 * ha))
+
+
+def cos_zenith(t: datetime, lat: float, lon: float) -> float:
+    """Cosine of the sun's zenith angle at an aware time (negative below the horizon)."""
+    tu = t.astimezone(timezone.utc)
+    minutes = tu.hour * 60 + tu.minute + tu.second / 60
+    decl, eq_time = _declination_eqtime(_julian_day(tu.date()) + minutes / 1440)
+    hour_angle = math.radians((minutes + eq_time + 4 * lon) / 4 - 180)
+    latr, declr = math.radians(lat), math.radians(decl)
+    return math.sin(latr) * math.sin(declr) + math.cos(latr) * math.cos(declr) * math.cos(hour_angle)

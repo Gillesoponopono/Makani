@@ -1,9 +1,11 @@
 <script lang="ts">
-  // The day at a glance in the hero: wind, air, water and waves over daylight hours.
+  // The day at a glance in the hero: wind, sky and air, water and waves over daylight hours.
   // The stats under the chart give the same things for the selected hour.
   import { compass } from '../lib/format'
   import { WAVE_TYPE, FLAT_M, lengthUnit, waveNumber } from '../lib/sea'
+  import { daySky } from '../lib/sky'
   import { daySummary, rangeText } from '../lib/summary'
+  import SkyIcon from './SkyIcon.svelte'
   import { cToF, windLabel, windUnitLabel, type TempUnit, type WindUnit } from '../lib/units'
   import type { Hour, SpotDoc } from '../lib/types'
 
@@ -20,6 +22,7 @@
   } = $props()
 
   const s = $derived(daySummary(hours))
+  const sky = $derived(daySky(hours))
   const deg = (c: number) => Math.round(temp === 'f' ? cToF(c) : c)
   const tempUnit = $derived(temp === 'f' ? '°F' : '°C')
 </script>
@@ -44,16 +47,20 @@
 
   <li class="tile">
     <div class="head">
-      <svg class="icon air" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M10 4a2 2 0 1 1 4 0v9.3a4.5 4.5 0 1 1-4 0Z" />
-        <path d="M12 9v7" class="mercury" />
-      </svg>
-      Air
+      {#if sky}
+        <SkyIcon sky={sky.sky} size={20} />
+      {:else}
+        <svg class="icon air" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M10 4a2 2 0 1 1 4 0v9.3a4.5 4.5 0 1 1-4 0Z" />
+          <path d="M12 9v7" class="mercury" />
+        </svg>
+      {/if}
+      {sky ? 'Sky & air' : 'Air'}
     </div>
     <div class="value display">
       {#if s.air}{rangeText(s.air, deg)}<span class="unit">{tempUnit}</span>{:else}–{/if}
     </div>
-    <div class="sub">Daytime</div>
+    <div class="sub">{sky ? sky.label : 'Daytime'}</div>
   </li>
 
   <li class="tile">

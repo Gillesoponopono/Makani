@@ -4,7 +4,9 @@
   import { clockLabel, compass, compassWords, hourLabel, weekdayShort } from '../lib/format'
   import { arrowPath } from '../lib/map'
   import { WAVE_TYPE, nextExtreme, tideAt, tideHeight, waveHeight } from '../lib/sea'
+  import { SKY_LABEL } from '../lib/sky'
   import { tempLabel, type TempUnit } from '../lib/units'
+  import SkyIcon from './SkyIcon.svelte'
   import type { Hour, SpotDoc, SunDay, Tide } from '../lib/types'
 
   let {
@@ -94,15 +96,26 @@
     class="tile temp"
     onclick={() => ontemp(temp === 'c' ? 'f' : 'c')}
     title="Switch to °{temp === 'c' ? 'F' : 'C'}"
-    aria-label={hour?.wrf.tairC != null ? `Air ${tempLabel(hour.wrf.tairC, temp)}, switch unit` : 'Air temperature'}
+    aria-label={hour?.wrf.tairC != null
+      ? `Air ${tempLabel(hour.wrf.tairC, temp)}${hour.sky ? `, ${SKY_LABEL[hour.sky].toLowerCase()}` : ''}, switch unit`
+      : 'Air temperature'}
   >
-    <svg class="icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
-      <path d="M10 4a2 2 0 1 1 4 0v9.3a4.5 4.5 0 1 1-4 0Z" />
-      <path d="M12 9v7" class="mercury" />
-    </svg>
+    {#if hour?.sky}
+      <SkyIcon sky={hour.sky} size={30} />
+    {:else}
+      <svg class="icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+        <path d="M10 4a2 2 0 1 1 4 0v9.3a4.5 4.5 0 1 1-4 0Z" />
+        <path d="M12 9v7" class="mercury" />
+      </svg>
+    {/if}
     <div>
       <div class="big display">{hour?.wrf.tairC != null ? tempLabel(hour.wrf.tairC, temp) : '–'}</div>
       <div class="small">Air{hour ? ` at ${hourLabel(hour.t)}` : ''}</div>
+      {#if hour?.sky}
+        <div class="note sky-note">
+          {SKY_LABEL[hour.sky]}{hour.sky === 'rain' && (hour.wrf.rainMmH ?? 0) >= 0.2 ? ` · ${hour.wrf.rainMmH!.toFixed(1)} mm/h` : ''}
+        </div>
+      {/if}
     </div>
   </button>
 
@@ -207,6 +220,9 @@
   }
   .note.tide-note {
     color: var(--tide);
+  }
+  .note.sky-note {
+    color: var(--sun);
   }
   @media (max-width: 760px) {
     .stats {

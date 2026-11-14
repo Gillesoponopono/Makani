@@ -302,9 +302,18 @@ for (const s of spotsCfg.spots) {
   spots[s.id] = [Math.round(u * 10) / 10, Math.round(v * 10) / 10]
   console.log(`${s.id.padEnd(12)} ${spots[s.id].join(', ')}  (${near.d.toFixed(0)} px from the picture's shore)`)
 }
+// Measurement points shown as small dots: anemometers (observationStations) and buoys.
+const stations = {}
+for (const [kind, list] of [['anemometer', spotsCfg.observationStations ?? []], ['buoy', spotsCfg.buoys ?? []]]) {
+  for (const s of list) {
+    const [u, v] = tps(...project(s.lat, s.lon))
+    stations[s.id] = { kind, name: s.name, xy: [Math.round(u * 10) / 10, Math.round(v * 10) / 10] }
+    console.log(`${kind.padEnd(10)} ${s.id.padEnd(8)} ${stations[s.id].xy.join(', ')}`)
+  }
+}
 fs.writeFileSync(
   path.join(OUT_DIR, 'maui-aerial-spots.json'),
-  JSON.stringify({ source: 'web/scripts/build-aerial.mjs', width: PW, height: PH, spots }, null, 2) + '\n',
+  JSON.stringify({ source: 'web/scripts/build-aerial.mjs', width: PW, height: PH, spots, stations }, null, 2) + '\n',
 )
 
 for (const w of [1536, 960]) {

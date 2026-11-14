@@ -1,0 +1,116 @@
+{
+  "generated": "2026-11-14",
+  "tool": "pipeline/tools/calibrate.py",
+  "model": "measured = a + b x forecast, per group (trade 30-100\u00b0 or other) x (day 7-18 h or night)",
+  "runs": [
+    "2025-10-11",
+    "2026-11-11"
+  ],
+  "spots": {
+    "kanaha": {
+      "reference": "mean of the Kahului Harbor (NOAA 1615680) and Kahului Airport (PHOG) anemometers",
+      "pairs": 26574,
+      "test": {
+        "from": "2026-07-01",
+        "maeRaw": 5.24,
+        "maeAdj": 2.83,
+        "maeRawDay": 4.37,
+        "maeAdjDay": 2.77,
+        "biasRaw": 4.45,
+        "biasAdj": -1.12
+      },
+      "groups": {
+        "other-day": {
+          "a": 3.25,
+          "b": 0.697,
+          "n": 1947
+        },
+        "other-night": {
+          "a": 2.07,
+          "b": 0.646,
+          "n": 2795
+        },
+        "trade-day": {
+          "a": 3.57,
+          "b": 0.541,
+          "n": 10803
+        },
+        "trade-night": {
+          "a": 3.18,
+          "b": 0.411,
+          "n": 11029
+        }
+      }
+    },
+    "sprecks": {
+      "reference": "mean of the Kahului Harbor (NOAA 1615680) and Kahului Airport (PHOG) anemometers",
+      "pairs": 26574,
+      "test": {
+        "from": "2026-07-01",
+        "maeRaw": 5.59,
+        "maeAdj": 2.93,
+        "maeRawDay": 4.87,
+        "maeAdjDay": 2.89,
+        "biasRaw": 4.91,
+        "biasAdj": -1.19
+      },
+      "groups": {
+        "other-day": {
+          "a": 3.33,
+          "b": 0.657,
+          "n": 1530
+        },
+        "other-night": {
+          "a": 2.22,
+          "b": 0.539,
+          "n": 2373
+        },
+        "trade-day": {
+          "a": 3.17,
+          "b": 0.542,
+          "n": 11220
+        },
+        "trade-night": {
+          "a": 2.59,
+          "b": 0.439,
+          "n": 11451
+        }
+      }
+    },
+    "harbor": {
+      "reference": "Kahului Harbor anemometer (NOAA 1615680)",
+      "pairs": 26735,
+      "test": {
+        "from": "2026-07-01",
+        "maeRaw": 3.88,
+        "maeAdj": 2.61,
+        "maeRawDay": 4.24,
+        "maeAdjDay": 2.66,
+        "biasRaw": 2.83,
+        "biasAdj": -0.63
+      },
+      "groups": {
+        "other-day": {
+          "a": 3.54,
+          "b": 0.617,
+          "n": 2956
+        },
+        "other-night": {
+          "a": 2.64,
+          "b": 0.622,
+          "n": 3677
+        },
+        "trade-day": {
+          "a": 2.93,
+          "b": 0.588,
+          "n": 9813
+        },
+        "trade-night": {
+          "a": 4.11,
+          "b": 0.453,
+          "n": 10289
+        }
+      }
+    }
+  }
+}

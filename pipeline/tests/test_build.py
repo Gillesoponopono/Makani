@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -18,9 +19,11 @@ def table(n_hours: int, u: float = -9.5, v: float = -3.5) -> bytes:
     rows = []
     for i in range(n_hours):
         t = (START + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        rows.append([t, 20.92, -156.44, u, v, 25.0, 1e-4 if i == 5 else 0.0])
+        hst = (i + START.hour - 10) % 24  # START is local midnight
+        swrad = max(0.0, 800 * math.sin(math.pi * (hst - 6.6) / 11.2)) * (0.3 if 24 + 13 <= i <= 24 + 15 else 1)
+        rows.append([t, 20.92, -156.44, u, v, 25.0, 1e-4 if i == 5 else 0.0, swrad])
     return json.dumps({"table": {
-        "columnNames": ["time", "latitude", "longitude", "Uwind", "Vwind", "Tair", "rain"],
+        "columnNames": ["time", "latitude", "longitude", "Uwind", "Vwind", "Tair", "rain", "swrad"],
         "rows": rows}}).encode()
 
 
@@ -134,7 +137,7 @@ def test_build_writes_spots_and_meta(tmp_path):
 def test_build_adds_waves_water_and_tides(tmp_path):
     build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
     meta = json.loads((tmp_path / "meta.json").read_text())
-    assert meta["schemaVersion"] == 4
+    assert meta["schemaVersion"] == 5
     assert meta["water"] == {"dataset": "roms_hiig", "spots": {s: "ok" for s in
                              ["kanaha", "sprecks", "harbor", "hookipa", "maui-sunset", "keawakapu"]}}
     assert meta["tides"]["stations"] == {"1615202": "ok", "1615680": "ok"}
@@ -213,3 +216,24 @@ def test_missing_values_are_skipped():
     assert doc["hours"][0]["wrf"]["tairC"] is None
     assert doc["hours"][0]["wrf"]["rainMmH"] is None
 
+
+
+def test_build_adds_the_sky(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    hours = json.loads((tmp_path / "spots" / "kanaha.json").read_text())["hours"]
+    by_t = {h["t"][:13]: h for h in hours}
+    assert by_t["2026-11-13T12"]["sky"] == "sun" and by_t["2026-11-13T12"]["sun"] > 0.8
+    assert by_t["2026-11-14T14"]["sky"] == "cloud"           # the fake model's cloudy afternoon
+    assert by_t["2026-11-13T05"]["sky"] == "rain"            # 0.36 mm/h before dawn
+    assert by_t["2026-11-13T22"]["sky"] is None              # night
+    assert by_t["2026-11-13T07"]["sky"] is not None          # low sun: borrowed from a later hour
+
+
+def test_build_adds_the_adjusted_wind_where_calibrated(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    kanaha = json.loads((tmp_path / "spots" / "kanaha.json").read_text())
+    assert kanaha["adjusted"]["reference"].startswith("mean of the Kahului Harbor")
+    h = kanaha["hours"][14]
+    assert 0 < h["wrf"]["knAdj"] < h["wrf"]["kn"]          # the model reads high near Kahului
+    hookipa = json.loads((tmp_path / "spots" / "hookipa.json").read_text())
+    assert hookipa["adjusted"] is None and "knAdj" not in hookipa["hours"][14]["wrf"]

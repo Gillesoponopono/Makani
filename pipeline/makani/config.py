@@ -28,6 +28,15 @@ def load_map(config_dir: Path | None = None) -> dict[str, Any]:
     return _load("map.json", config_dir)
 
 
+def load_calibration(config_dir: Path | None = None) -> dict[str, Any] | None:
+    """config/calibration.json (tools/calibrate.py); optional."""
+    path = (config_dir or CONFIG_DIR) / "calibration.json"
+    if not path.exists():
+        return None
+    with path.open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def local_tz(spots_cfg: dict[str, Any]) -> timezone:
     """Hawaii has no DST, so a fixed offset is exact."""
     return timezone(timedelta(hours=spots_cfg["utcOffsetHours"]), "HST")

@@ -10,13 +10,18 @@ export interface Hour {
     gustEst: number
     tairC: number | null
     rainMmH: number | null
+    knAdj?: number | null // adjusted forecast (pipeline/makani/adjust.py), only where calibrated
   }
   sector: Sector
   sports: string[]
   daylight: boolean
   wave?: Wave | null // missing before schema 3, null when the model has no value
   waterC?: number | null // sea surface °C (PacIOOS ROMS); missing before schema 4
+  sky?: Sky | null // from the model's sunshine and rain (schema 5); null at night without rain
+  sun?: number | null // share of a clear sky's sunshine reaching the ground, daylight only
 }
+
+export type Sky = 'sun' | 'partly' | 'cloud' | 'rain'
 
 export type WaveType = 'flat' | 'chop' | 'swell' | 'mixed'
 
@@ -71,6 +76,8 @@ export interface SpotDoc {
   waves?: { status: 'ok' | 'sheltered' | 'error' | 'none'; swanCell?: { lat: number; lon: number }; ww3Cell?: { lat: number; lon: number } | null }
   tide?: Tide | null
   water?: { status: 'ok' | 'error' | 'none'; cell?: { lat: number; lon: number } }
+  /** Where the adjusted forecast comes from; null for spots without a nearby anemometer. */
+  adjusted?: { reference: string; fitted: string | null; maeRaw: number | null; maeAdj: number | null } | null
 }
 
 export interface SportBand {

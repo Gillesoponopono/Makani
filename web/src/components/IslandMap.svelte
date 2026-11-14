@@ -1,7 +1,8 @@
 <script lang="ts">
   // The aerial picture of Maui with one marker per spot: a dot at the beach and a
   // chip with the wind arrow (pointing downwind, coloured by speed) and the
-  // speed for the chosen hour. Positions come from web/scripts/build-aerial.mjs.
+  // speed for the chosen hour, plus small dots for the measuring points: anemometers
+  // (red) and wave buoys (yellow). Positions come from web/scripts/build-aerial.mjs.
   import aerial960 from '../assets/maui-aerial-960.webp'
   import aerial1536 from '../assets/maui-aerial-1536.webp'
   import placement from '../assets/maui-aerial-spots.json'
@@ -30,6 +31,13 @@
   const PW = placement.width
   const PH = placement.height
   const POS = placement.spots as Record<string, number[]>
+  const STATIONS = Object.entries(
+    (placement as { stations?: Record<string, { kind: 'anemometer' | 'buoy'; name: string; xy: number[] }> }).stations ?? {},
+  ).map(([id, s]) => ({ id, ...s }))
+  const STATION_LABEL = { anemometer: 'Anemometer', buoy: 'Wave buoy' }
+  // Chips for these spots go below their dots, over the island; Kanahā's sits just above
+  // the Harbor dot, lined up with the Harbor chip. That leaves Hoʻokipa alone in the bay row.
+  const ON_LAND = ['harbor', 'sprecks']
   // Short chip names; the hero title carries the full one.
   const SHORT: Record<string, string> = { sprecks: 'Sprecks', harbor: 'Harbor', 'maui-sunset': 'Maui Sunset' }
   const shortName = (d: SpotDoc) => SHORT[d.id] ?? d.displayName.replace(/\s*\(.*\)/, '')
@@ -72,12 +80,27 @@
     const chips = layoutChips(
       list.map(({ id, x, y, w }) => ({ id, x, y, w })),
       { w: boxW, h: boxH },
-      { northBelowY: (420 - crop.y) * sy, rise: mode === 'hero' ? 54 : 50 },
+      {
+        northBelowY: (420 - crop.y) * sy,
+        rise: mode === 'hero' ? 54 : 50,
+        land: ON_LAND,
+        over: { kanaha: 'harbor' },
+        avoid: STATIONS.map((s) => ({ x: (s.xy[0] - crop.x) * sx, y: (s.xy[1] - crop.y) * sy })),
+      },
     )
     return list.map((m) => ({ ...m, chip: chips.find((c) => c.id === m.id)! }))
   })
 
   const shownHour = $derived(markers.find((m) => m.hour)?.hour)
+
+  const stationDots = $derived.by(() => {
+    if (!boxW || !boxH) return []
+    const sx = boxW / crop.w
+    const sy = boxH / crop.h
+    return STATIONS.map((s) => ({ ...s, x: (s.xy[0] - crop.x) * sx, y: (s.xy[1] - crop.y) * sy })).filter(
+      (s) => s.x >= 0 && s.x <= boxW && s.y >= 0 && s.y <= boxH,
+    )
+  })
 </script>
 
 <div class="island {mode}" style:aspect-ratio={mode === 'block' ? `${crop.w} / ${crop.h}` : undefined} bind:clientWidth={boxW} bind:clientHeight={boxH}>
@@ -101,6 +124,17 @@
 
   {#each markers as m (m.id)}
     <span class="dot" class:sel={m.id === selected} style:left="{m.x}px" style:top="{m.y}px" aria-hidden="true"></span>
+  {/each}
+
+  {#each stationDots as s (s.id)}
+    <span
+      class="st {s.kind}"
+      style:left="{s.x}px"
+      style:top="{s.y}px"
+      title="{STATION_LABEL[s.kind]}: {s.name}"
+      role="img"
+      aria-label="{STATION_LABEL[s.kind]}: {s.name}"
+    ></span>
   {/each}
 
   {#each markers as m (m.id)}
@@ -132,9 +166,17 @@
     </a>
   {/each}
 
-  {#if shownHour}
-    <p class="when">Wind at {hourLabel(shownHour.t)}</p>
-  {/if}
+  <div class="corner">
+    {#if stationDots.length}
+      <ul class="key" aria-label="Measuring points">
+        {#if stationDots.some((s) => s.kind === 'anemometer')}<li><span class="st anemometer"></span>Anemometer</li>{/if}
+        {#if stationDots.some((s) => s.kind === 'buoy')}<li><span class="st buoy"></span>Wave buoy</li>{/if}
+      </ul>
+    {/if}
+    {#if shownHour}
+      <p class="when">Wind at {hourLabel(shownHour.t)}</p>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -264,13 +306,62 @@
     font-size: 0.72rem;
     font-weight: 600;
   }
-  .when {
-    left: auto;
+  .corner {
+    position: absolute;
     right: 10px;
+    bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
   }
-  .hero .when {
+  .hero .corner {
     right: 12px;
     bottom: 14px;
+  }
+  .corner .when {
+    position: static;
+  }
+  .key {
+    display: flex;
+    gap: 10px;
+    margin: 0;
+    padding: 3px 9px;
+    list-style: none;
+    border-radius: 999px;
+    background: rgba(6, 20, 36, 0.7);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+  .key li {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .block .key {
+    /* narrow on phones: one item per line, clear of the Kīhei chips on the left */
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 10px;
+  }
+  .key .st {
+    position: static;
+    margin: 0;
+  }
+  .st {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px rgba(6, 18, 31, 0.9);
+  }
+  .st.anemometer {
+    background: #ff5a4f;
+  }
+  .st.buoy {
+    background: #ffd84a;
   }
   .block .chip {
     height: 28px;

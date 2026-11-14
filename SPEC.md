@@ -235,7 +235,9 @@ archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST 
   "hours": [
     {
       "t": "2026-11-13T14:00:00-10:00",
-      "wrf": { "kn": 18.4, "dir": 68, "gustEst": 23.9, "tairC": 26.1, "rainMmH": 0.0 },
+      "wrf": { "kn": 18.4, "dir": 68, "gustEst": 23.9, "tairC": 26.1, "rainMmH": 0.0,
+               "knAdj": 13.5 },                           // adjusted forecast, only where calibrated (adjust.py)
+      "sky": "sun", "sun": 0.97,                          // sun | partly | cloud | rain | null (night); sunshine vs a clear sky
       "nws": { "kn": 17, "gust": 24, "dir": 70 },       // later (M4); null if unavailable
       "sector": "good",                                   // good | ok | poor | danger
       "sports": ["foil_wing", "directional", "twintip"],
@@ -259,7 +261,12 @@ archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST 
   "sun": [{ "date": "2026-11-13", "rise": "06:41", "set": "17:47" }]
 }
 ```
-`meta.json` gains `waves.spots` (status per spot: ok / sheltered / error), `water.spots` (ok / error) and `tides.stations` (ok / kept / error). Schema version 4 (3 added waves and tides, 4 sea temperature).
+The spot document also carries `"adjusted": { "reference", "fitted", "maeRaw", "maeAdj" }` (null without a calibration).
+`meta.json` gains `waves.spots` (status per spot: ok / sheltered / error), `water.spots` (ok / error) and `tides.stations` (ok / kept / error). Schema version 5 (3 added waves and tides, 4 sea temperature, 5 sky and the adjusted wind).
+
+**Sky** (`makani/sky.py`): WRF's ground-level solar radiation (`swrad`, in the same ERDDAP request as the wind) over the Haurwitz clear-sky radiation for the sun's height gives the sunshine share: ≥ 80 % "sun", 50–80 % "partly", < 50 % "cloud"; rain ≥ 0.25 mm/h "rain", day or night. With the sun under ~12° the ratio is unreliable, so those daylight hours borrow the nearest judged hour. Shown simply (icons and words, the rain rate when it rains): a single model run gives no probability, and a sunshine percentage would read like one.
+
+**Adjusted forecast** (`makani/adjust.py`, `config/calibration.json` from `pipeline/tools/calibrate.py`): measured = a + b × forecast, fitted per spot and situation (trade direction 30–100° or not × day 7–18 h or night) on 14 months of archived forecasts vs measured wind. Reference: the mean of the Kahului Harbor and Airport anemometers for Kanahā and Sprecks, the harbor anemometer for Kahului Harbor; none for Hoʻokipa and Kīhei (no anemometer close enough). Checked on months the fit didn't see (Jul–Nov 2026), kiting hours: Kanahā 4.4 → 2.8 kn typical miss, Sprecks 4.9 → 2.9, Harbor 4.2 → 2.7. E.g. trade-wind day at Kanahā: 25 kn forecast → ~17 kn. The ratings and best session still use the raw model. Rerun the tool from time to time as the archive grows.
 Sectors and sports are computed in the pipeline (one implementation, also used by alerts). The front end only displays them.
 
 ### 7.5 `map/frames.json`
@@ -315,10 +322,10 @@ Implemented in M2 (`makani/mapframes.py`), box and stride in `config/map.json`. 
 - PWA (manifest + service worker, needed for Web Push) comes with M6.
 
 ### 8.2 Spot day `#/<spot>/<day>`
-1. **Hero:** "Tomorrow / at Kanahā (Kite Beach)", the date, a lower-confidence tag from day 3, and **four day tiles** (`DayTiles.svelte`, `lib/summary.ts`) over the day's daylight hours: **Wind** "15–21 kn" with the speed-weighted mean direction and top gust ("ENE · gusts to 27"); **Air** "24–26 °C"; **Water** "26 °C" (sea surface, ROMS); **Waves** "1.1–1.3 m" with the period range and the most common type ("15–17 s · Swell + chop"), "Flat" under 0.3 m or at the sheltered harbor. Units follow the toggles. The stats under the chart give the same things for the selected hour. On wide screens the island picture fills the right of the hero (§8.4); on phones it sits under the title.
-2. **Wind Forecast** card (`WindChart.svelte`, geometry in `lib/chart.ts`): wind (3 px, coloured hour by hour by the knots scale, blue → green → yellow → orange) and estimated gusts (grey) on one axis shared by all days of the spot, in the chosen unit; area under the wind fading out; **best session** shaded amber with its bounds labelled on the time axis; the session's peak labelled ("21 kn"); night shaded; "NOW" line on today; a strip of **direction arrows** under the time axis coloured by sector (good / OK / poor / offshore). Hover, tap or keys select an hour: crosshair + readout, and the hero map and the stats follow that hour.
+1. **Hero:** "Tomorrow / at Kanahā (Kite Beach)", the date, a lower-confidence tag from day 3, and **four day tiles** (`DayTiles.svelte`, `lib/summary.ts`) over the day's daylight hours: **Wind** "15–21 kn" with the speed-weighted mean direction and top gust ("ENE · gusts to 27"); **Sky & air** "24–26 °C" with the day's sky icon and words ("Sunny", "Mostly sunny, passing showers", "Showers likely"); **Water** "26 °C" (sea surface, ROMS); **Waves** "1.1–1.3 m" with the period range and the most common type ("15–17 s · Swell + chop"), "Flat" under 0.3 m or at the sheltered harbor. Units follow the toggles. The stats under the chart give the same things for the selected hour. On wide screens the island picture fills the right of the hero (§8.4); on phones it sits under the title.
+2. **Wind Forecast** card (`WindChart.svelte`, geometry in `lib/chart.ts`): wind (3 px, coloured hour by hour by the knots scale, blue → green → yellow → orange) and estimated gusts (grey) on one axis shared by all days of the spot, in the chosen unit; the **adjusted forecast** dashed near-white where the spot has one (legend "Adjusted", explained in the note under the chart); area under the wind fading out; **best session** shaded amber with its bounds labelled on the time axis; the session's peak labelled ("21 kn"); night shaded; "NOW" line on today; a strip of **direction arrows** under the time axis coloured by sector (good / OK / poor / offshore). Hover, tap or keys select an hour: crosshair + readout, and the hero map and the stats follow that hour.
    Under the arrows, on the same time axis: the **wave strip** and the **tide panel** (§8.8).
-3. **Stats** card, 3 × 2 (2 × 3 on phones): direction (arrow, compass point, words, sector note), waves, tide, air temperature (tap to switch °C/°F), sunrise, sunset. All but the sun follow the selected hour, else the current hour (today) or the session peak.
+3. **Stats** card, 3 × 2 (2 × 3 on phones): direction (arrow, compass point, words, sector note), waves, tide, air temperature with the hour's sky icon and word (tap to switch °C/°F), sunrise, sunset. All but the sun follow the selected hour, else the current hour (today) or the session peak.
 4. **Hourly table** (collapsed): time, wind badge, gust, direction + sector mark, waves (height, period, type), tide, air, rain.
 - Later (M4): NWS second opinion, live observations, marine text.
 
@@ -328,8 +335,9 @@ One row per forecast day: name and date, confidence tag, best session and range,
 ### 8.4 Island map (spot markers on the aerial picture)
 Replaces the M2 grid-of-arrows map (judged not very useful): just the spots, on a picture of the island.
 - `IslandMap.svelte` shows the aerial picture (`web/scripts/maui-aerial.webp`, supplied for the project) and one marker per spot: a **dot at the beach** (amber for the selected spot) and a **chip** joined to it by a leader line, with the **wind arrow** (pointing downwind, coloured by the knots scale), a short name and the speed in the chosen unit, ⚠ when offshore. Chips link to that spot. The hour shown is the one selected on the chart ("Wind at 3 PM").
-- Spots 1–2 km apart (Harbor, Kanahā, Sprecks) can't carry chips at their dots, so `lib/callouts.ts` lays chips out from the real chip widths: north-shore chips in a row over the bay above their dots (two staggered rows when one doesn't fit), the Kīhei chips in a column over the channel to their left. Unit-tested for no overlap and staying inside the picture.
-- Wide screens: whole island, edges melting into the hero. Phones: cropped on the central valley so the markers spread out.
+- Spots 1–2 km apart (Harbor, Kanahā, Sprecks) can't carry chips at their dots, so `lib/callouts.ts` lays chips out from the real chip widths: Kanahā and Hoʻokipa chips in a row over the bay above their dots (two staggered rows when one doesn't fit), Harbor and Sprecks in a row below theirs, over the island, and the Kīhei chips in a column over the channel to their left (lifted above the dot when a wide chip would cover it). Rows step aside so they never cover a measuring-point dot. Unit-tested for no overlap and staying inside the picture.
+- **Measuring points:** small red dots for the anemometers (Kahului Harbor, NOAA 1615680; Kahului Airport PHOG) and yellow for the wave buoy (Pauwela 51205; the other nearby buoy, 51213 Kaumalapau off Lānaʻi, is outside the picture), with a key in the corner. Positions come from the same script (`stations` in `maui-aerial-spots.json`, from `observationStations` and `buoys` in the config).
+- Wide screens: whole island, edges melting into the hero. Phones: cropped on the central valley so the markers spread out, starting a little above the picture (a sea band) so the north-shore chips have room above Hoʻokipa.
 - **Placing spots on a picture that isn't georeferenced:** `node web/scripts/build-aerial.mjs` (needs `sharp`: `npm i --no-save sharp` in `web/`, then `npm ci`) finds the picture's shoreline, pairs it with the real coastline (`web/src/assets/maui-coast.json`) through 21 hand-picked landmarks, fits a thin-plate spline map → picture and pushes each spot's beach through it (all land within 2 px of the picture's shore). It also writes the two web sizes of the picture. Outputs are committed: `maui-aerial-{1536,960}.webp`, `maui-aerial-spots.json`. Rerun it after adding a spot.
 - **Coastline:** `node web/scripts/build-coast.mjs` downloads the Maui County polygon (US Census 2020 county boundaries, public domain, from the Hawaiʻi Statewide GIS Program ArcGIS service, server-side generalised to 0.0004° ≈ 40 m), clips it to the `config/map.json` box, projects it and writes `web/src/assets/maui-coast.json`. Only the aerial script uses it now.
 
@@ -342,6 +350,7 @@ Create or manage alerts (§9). Shows the user's push alerts for this browser. Em
 - Hourly table under the chart: observed kn/gust/dir vs each forecast, with the error.
 - Summary stats over the last 7 / 30 days: bias and MAE by lead time, so riders learn e.g. "the model runs 2 kn light at Kanahā in strong trades".
 - Data loads lazily: `archive/index.json`, then only the months and runs needed for the chosen date.
+- First analysis (2026-11-14, `pipeline/tools/error_factors.py`, 14 months, forecasts 1–2 days ahead, 9 AM–5 PM): the forecast strength is the main driver of the error, then the direction; month, hour, air temperature and clouds matter little overall. Model vs its own cell: Kahului Harbor +3.1 kn bias, 4.2 kn MAE, growing with the forecast strength (+7.7 kn when ≥ 25 kn); Kahului Airport −1.6 kn, 3.5 kn MAE, only 2.5 kn in trades ≥ 14 kn after 11 AM, but 8 kn under on hot days with a light non-trade forecast (sea breeze the model misses).
 - Honest caveats on the page: the stations aren't exactly at the spot (Harbor on the waterfront west of Kanahā, airport inland), and WRF is a 2 km cell value.
 
 ### 8.7 About `#/about`
@@ -362,7 +371,8 @@ Checked on 2026-11-13 data: Kanahā 1.1–1.4 m, mostly mixed (≈ 1.6 m of 7 s 
 **On the chart** (no second y-axis on the wind plot):
 - **Wave strip** under the direction arrows, titled "Waves m · period": one cell every 3 h (value of the middle hour) with the height and the period ("1.3 / 17s"), shaded in one hue that gets stronger with size (bands at 0.3 / 0.6 / 1.2 / 2 / 3 m). Text stays in the text colour. Under the cells, runs of the same type are underlined and named ("Swell + chop", "Wind chop", "Flat"); the name shortens or hides when the run is too narrow. At the Harbor: "Sheltered harbor: flat water, wind chop only".
 - **Tide panel** under that, titled "Tide m" with the station on the right ("Makena (curve estimated)" for the cosine fit): area curve on a scale shared by all days of the spot, passing through the day's highs and lows. Highs are labelled above ("H 0.7 m · 6:02 AM"), lows below, so neighbouring turns never collide.
-- Night shading, the NOW line and the crosshair run through both. The readout adds the waves (height, period, type, direction arrow) and the tide (height, rising/falling).
+- A **Sky** strip sits above the waves: one icon per hour (every 2 h on narrow screens) for sun, partly cloudy, cloudy or showers.
+- Night shading, the NOW line and the crosshair run through all of them. The readout adds the adjusted wind, the waves (height, period, type, direction arrow), the tide (height, rising/falling) and the air with the sky ("25°C air · sunny", "showers 1.2 mm/h").
 - The compact charts of the day list leave both out.
 
 **Stats tiles:** Waves (height, period, from-direction, type, arrow pointing where the waves go) and Tide (height at the hour, rising/falling, next high or low with its time).
@@ -429,7 +439,7 @@ Makani/
 │  ├─ ratings.json              # sport bands, gust factor
 │  └─ map.json                  # map box, grid stride, coastline source
 ├─ pipeline/                    # Python 3.12
-│  ├─ makani/{erddap,thredds,obs,waves,water,tides,sun,ratings,build,archive,validate}.py (later nws, alerts)
+│  ├─ makani/{erddap,thredds,obs,waves,water,tides,sky,adjust,sun,ratings,build,archive,validate}.py (later nws, alerts)
 │  ├─ tests/                    # pytest, with recorded fixtures
 │  └─ pyproject.toml            # stdlib only in M1; pywebpush added in M6
 ├─ web/                         # Svelte + Vite + TS

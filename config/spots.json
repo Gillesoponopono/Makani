@@ -21,6 +21,9 @@
       "note": "ASOS ~1 km inland, so usually reads lower than on the water; the API keeps only ~7 days"
     }
   ],
+  "buoys": [
+    { "id": "51205", "name": "Pauwela buoy (PacIOOS, CDIP 187)", "lat": 21.018, "lon": -156.421, "note": "Waverider: wave height, period, direction and sea temperature; no wind. The other nearby buoy, 51213 Kaumalapau (Lanai), is off the island picture" }
+  ],
   "tideStations": [
     { "id": "1615680", "name": "Kahului Harbor", "kind": "harmonic" },
     { "id": "1615202", "name": "Makena", "kind": "subordinate", "note": "NOAA gives only high/low times here (offsets from Kahului); the curve in between is a cosine fit" }

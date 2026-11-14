@@ -2,6 +2,7 @@
   import Arrow from '../components/Arrow.svelte'
   import DayStats from '../components/DayStats.svelte'
   import DayTiles from '../components/DayTiles.svelte'
+  import SkyIcon from '../components/SkyIcon.svelte'
   import IslandMap from '../components/IslandMap.svelte'
   import WindChart from '../components/WindChart.svelte'
   import { axisMax } from '../lib/chart'
@@ -141,6 +142,7 @@
       <ul class="legend" aria-label="Legend">
         <li><span class="key wind-key"></span>Wind</li>
         <li><span class="key gust-key"></span>Gusts <span class="est">(est.)</span></li>
+        {#if doc.adjusted}<li><span class="key adj-key"></span>Adjusted</li>{/if}
       </ul>
     </header>
     <WindChart
@@ -163,6 +165,11 @@
       Arrows under the chart point where the wind blows: <span class="s-good">good</span>,
       <span class="s-ok">OK</span>, <span class="s-poor">poor</span> or <span class="s-danger">offshore</span> for this spot.
       Gusts are estimated (wind × {meta.ratings.gustFactor}).
+      {#if doc.adjusted}
+        Adjusted: the model corrected with 14 months of forecasts against the {doc.adjusted.reference}; there it cut the
+        typical miss in kiting hours from {doc.adjusted.maeRaw?.toFixed(1)} to {doc.adjusted.maeAdj?.toFixed(1)} kn. The
+        anemometers aren't on the beach, which may get more wind.
+      {/if}
       {#if doc.waves?.status === 'ok'}
         Waves: model height just off the beach and peak period (PacIOOS SWAN); the type comes from the offshore swell
         and wind-chop split (WaveWatch III).
@@ -185,11 +192,12 @@
               <th scope="col">Time</th>
               <th scope="col">Wind</th>
               <th scope="col">Gust*</th>
+              {#if doc.adjusted}<th scope="col">Adj.</th>{/if}
               <th scope="col">Direction</th>
               {#if hasWaves}<th scope="col">Waves</th>{/if}
               {#if doc.tide}<th scope="col">Tide</th>{/if}
               <th scope="col">Air</th>
-              <th scope="col" class="opt">Rain</th>
+              <th scope="col" class="opt">Sky</th>
             </tr>
           </thead>
           <tbody>
@@ -198,6 +206,7 @@
                 <th scope="row">{hourLabel(h.t)}</th>
                 <td><span class="kn kn-{knBand(h.wrf.kn)}">{windLabel(h.wrf.kn, wind)}</span></td>
                 <td class="num muted">{windLabel(h.wrf.gustEst, wind)}</td>
+                {#if doc.adjusted}<td class="num">{h.wrf.knAdj != null ? windLabel(h.wrf.knAdj, wind) : '–'}</td>{/if}
                 <td class="dirc" title="From {compass(h.wrf.dir)} ({h.wrf.dir}°). {SECTOR[h.sector].label}">
                   <Arrow dir={h.wrf.dir} size={14} />
                   {compass(h.wrf.dir)}
@@ -217,14 +226,19 @@
                   <td class="num">{ft == null ? '–' : tideHeight(ft, temp)}</td>
                 {/if}
                 <td class="num">{h.wrf.tairC == null ? '–' : tempLabel(h.wrf.tairC, temp)}</td>
-                <td class="num opt rain">{h.wrf.rainMmH != null && h.wrf.rainMmH >= 0.2 ? `${h.wrf.rainMmH.toFixed(1)} mm` : ''}</td>
+                <td class="num opt rain">
+                  <span class="skycell">
+                    {#if h.sky}<SkyIcon sky={h.sky} size={16} />{/if}
+                    {h.wrf.rainMmH != null && h.wrf.rainMmH >= 0.2 ? `${h.wrf.rainMmH.toFixed(1)} mm` : ''}
+                  </span>
+                </td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
       <p class="chart-note">
-        Wind and gust in {windUnitLabel(wind)}. *Estimated gust. ✓ good, ~ OK, · poor, ⚠ offshore direction.{#if hasWaves}
+        Wind and gust in {windUnitLabel(wind)}. *Estimated gust.{#if doc.adjusted} Adj.: adjusted forecast.{/if} ✓ good, ~ OK, · poor, ⚠ offshore direction.{#if hasWaves}
           Waves in {lengthUnit(temp)}, period in seconds.{/if}
       </p>
     {/if}
@@ -356,6 +370,11 @@
   .gust-key {
     background: var(--gust);
   }
+  .adj-key {
+    height: 0;
+    border-top: 2px dashed var(--adj);
+    border-radius: 0;
+  }
   .chart-note {
     margin: 8px 0 0;
     color: var(--faint);
@@ -429,7 +448,12 @@
     font-variant-numeric: tabular-nums;
   }
   .rain {
-    color: #7ab8ff;
+    color: var(--rain);
+  }
+  .skycell {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
   .wtype {
     margin-left: 4px;
