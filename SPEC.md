@@ -42,7 +42,7 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 
 | Source | What | Where it's fetched | Refresh |
 |---|---|---|---|
-| **PacIOOS WRF `wrf_mo`** (ERDDAP griddap) | 10 m wind U/V, air temp, rain, ~2 km grid, hourly — the site's current forecast | GitHub Action | hourly check, full fetch only for a new complete run |
+| **PacIOOS WRF `wrf_mo`** (ERDDAP griddap) | 10 m wind U/V, air temp, rain, ~2 km grid, hourly — the site's current forecast | GitHub Action | hourly check, full fetch for a new complete run and every ~6 h with the same run |
 | **PacIOOS WRF individual runs** (THREDDS `wrf_mo/runs`, NCSS point CSV) | Every run since 2010-05-14, exactly as issued | GitHub Action → forecast archive | when a new run is complete; one-off backfill |
 | **NWS gridpoint raw forecast** (`api.weather.gov/gridpoints/HFO/x,y`) | Hourly wind speed, **gusts** and direction per spot (second opinion) | GitHub Action | every 6 h |
 | **NOAA CO-OPS Kahului Harbor wind** (station `1615680`, `product=wind`) | Measured wind, direction, gusts on the waterfront, 6-min data, **years of history** | GitHub Action → observation archive | every ~6 h (last 7 days re-merged); one-off backfill |
@@ -183,13 +183,13 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
 
 ### 7.1 Schedule
 `.github/workflows/forecast.yml`
-- `cron: "7 * * * *"`: an **hourly light check** (one ~13 KB ERDDAP request). The full download runs only when a new run is complete (about once a day); observations are refreshed at most every 6 h (`--obs-every-hours 6`), so the site redeploys ~5 times a day rather than 24. GitHub cron can run 5–60 min late, so nothing depends on exact timing.
+- `cron: "7 * * * *"`: an **hourly light check** (one ~13 KB ERDDAP request). The full download runs when a new run is complete (about once a day) and, with the same run, every 6 h (`--refresh-every-hours 6`) so waves, sea temperature and tides stay fresh when PacIOOS skips a day of WRF (7 of 37 days in Oct–Nov 2026); observations are refreshed at most every 6 h (`--obs-every-hours 6`), so the site redeploys ~5 times a day rather than 24. GitHub cron in practice fires every 4–8 h, not hourly. GitHub cron can run 5–60 min late, so nothing depends on exact timing.
 - `workflow_dispatch` for manual runs.
 - `concurrency: forecast` (no overlapping runs).
 - Scheduled workflows on public repos are disabled after 60 days without repo activity; once a day the job re-enables itself through the API, which resets that timer.
 
 ### 7.2 Steps
-1. **Detect new run:** read `time_coverage_end` from `erddap/info/wrf_mo/index.csv` (~13 KB, 0.2 s). If it equals `meta.json.wrf.coverageEnd` on the `data` branch, skip the WRF fetch. When it changes, also scan THREDDS and archive every complete run of the last 10 days that isn't archived yet (`makani/thredds.py`). NWS, tides and alerts run on their own cadence.
+1. **Detect new run:** read `time_coverage_end` from `erddap/info/wrf_mo/index.csv` (~13 KB, 0.2 s). If it equals `meta.json.wrf.coverageEnd` on the `data` branch and the last build (`generatedAt`) is less than 6 h old, skip the WRF fetch. `meta.wrf.run` records when the run started (coverage end − 168 h: ERDDAP's coverage end only moves once a new run is almost complete). When it changes, also scan THREDDS and archive every complete run of the last 10 days that isn't archived yet (`makani/thredds.py`). NWS, tides and alerts run on their own cadence.
 2. **Fetch WRF** with small, bounded ERDDAP **`.json`** requests, parsed with the Python standard library (no numpy/xarray needed; measured 2026-11-13: one spot ≈ 2 s / 7 KB, the stride-2 map box ≈ 4 s / 2.4 MB):
    - Spots: `Uwind,Vwind,Tair,rain` at each spot's cell, from **local midnight HST** → `last` (so "today" shows all 24 hours; past hours come from the model analysis).
    - Map (M2): `Uwind,Vwind` over the Maui box lat **20.50–21.10**, lon **−156.72 to −155.95**, stride 2.
@@ -318,7 +318,7 @@ Implemented in M2 (`makani/mapframes.py`), box and stride in `config/map.json`. 
 - Spot and units are remembered in `localStorage` (wrapped in try/catch; the site works without it).
 - Budget: first load ≤ 250 KB gzipped (JS + CSS ≈ 50 KB today), excluding the island picture (≈ 76 KB on phones, 185 KB on large screens).
 - Accessibility: WCAG AA contrast on the dark theme, chart operable with the keyboard (← → Home End Esc) with an `aria-live` readout, a full hourly table behind a disclosure, text with every colour signal.
-- "PacIOOS WRF model run through … · updated … ago" under the page. A yellow banner appears if WRF data is > 18 h old, red if > 36 h.
+- Banner when the forecast is old (§8.10). The model run and refresh time are on the Guide page.
 - PWA (manifest + service worker, needed for Web Push) comes with M6.
 
 ### 8.2 Spot day `#/<spot>/<day>`
@@ -372,6 +372,12 @@ Checked on 2026-11-13 data: Kanahā 1.1–1.4 m, mostly mixed (≈ 1.6 m of 7 s 
 - **Home screen:** `manifest.webmanifest` (name, standalone display, navy theme, 192/512 and maskable icons) for Android and an `apple-touch-icon` for iPhone, so "Add to Home Screen" gives a Makani icon and opens like an app.
 - **Link previews:** Open Graph and Twitter card tags in `index.html` with an absolute `og-image.jpg` (1200 × 630, ~90 KB to stay under WhatsApp's limit): the title, a one-line description and the island picture. Spot links (`#/kanaha`, `#/hookipa/tomorrow`...) share the same preview, the hash never reaches the server.
 - Generated by `node web/scripts/build-icons.mjs` (needs `sharp`, as the aerial script) from the header logo and the island picture; the outputs and the favicon, now the same logo, are committed.
+
+### 8.10 Old-forecast banner (built)
+Two clocks (`web/src/lib/freshness.ts`): the WRF run (`meta.wrf.run`, or coverage end − 168 h for older data) and Makani's refresh (`meta.generatedAt`, every ~6 h). A run is normally published about a day after it starts and replaced a day later.
+- Refresh older than 24 h: yellow "Forecast data last refreshed N hours ago (wind model run of …). The model server may be unreachable", red once the run is also > 80 h old.
+- Otherwise run older than 56 h (the next run is late): yellow "The wind forecast comes from the model run of Sat, Nov 14, 2 PM: the University of Hawaiʻi model hasn't published a newer one yet. It still covers until …".
+- Run older than 80 h (two runs missed): red, "treat it with caution".
 
 **On the chart** (no second y-axis on the wind plot):
 - **Wave strip** under the direction arrows, titled "Waves m · period": one cell every 3 h (value of the middle hour) with the height and the period ("1.3 / 17s"), shaded in one hue that gets stronger with size (bands at 0.3 / 0.6 / 1.2 / 2 / 3 m). Text stays in the text colour. Under the cells, runs of the same type are underlined and named ("Swell + chop", "Wind chop", "Flat"); the name shortens or hides when the run is too narrow. At the Harbor: "Sheltered harbor: flat water, wind chop only".

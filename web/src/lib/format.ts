@@ -1,6 +1,6 @@
 import type { Hour, SunDay } from './types'
 
-const HST_OFFSET_MS = -10 * 3600_000 // Hawaii: UTC-10, no DST
+export const HST_OFFSET_MS = -10 * 3600_000 // Hawaii: UTC-10, no DST
 
 /** "YYYY-MM-DDTHH" for the current hour in HST, comparable with hour.t.slice(0, 13). */
 export function currentHourKey(now = Date.now()): string {

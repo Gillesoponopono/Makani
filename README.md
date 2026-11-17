@@ -11,7 +11,7 @@ See [SPEC.md](SPEC.md) for the full specification.
 | `config/` | Spots (coordinates, model cell, direction sectors) and sport bands, shared by everything |
 | `pipeline/` | Python (stdlib only) that fetches WRF wind, SWAN/WW3 waves and ROMS sea temperature from ERDDAP and NOAA tide predictions, and writes the site's JSON |
 | `web/` | Svelte + Vite site; `web/scripts/` builds the coastline and places the spots on the island picture (run once, outputs committed) |
-| `.github/workflows/` | `ci.yml` tests, `forecast.yml` hourly light check (full fetch only for a new run, observations every ~6 h), `deploy.yml` Pages deploy |
+| `.github/workflows/` | `ci.yml` tests, `forecast.yml` hourly light check (full fetch for a new run, and every ~6 h with the same run for fresh waves and tides; observations every ~6 h), `deploy.yml` Pages deploy |
 
 Forecast JSON is not committed to `main`. `forecast.yml` force-pushes it to the orphan `data` branch (one commit, no history), and `deploy.yml` copies it into the site at build time.
 

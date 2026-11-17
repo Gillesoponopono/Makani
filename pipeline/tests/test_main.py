@@ -14,8 +14,9 @@ def calls(monkeypatch, tmp_path):
     rec = {"build": 0, "thredds": [], "obs": 0, "new_run": False, "obs_updated": 2, "runs_added": 1,
            "erddap_down": False}
 
-    def fake_build(out, force=False, now=None):
+    def fake_build(out, force=False, refresh_hours=0, now=None):
         rec["build"] += 1
+        rec["refresh_hours"] = refresh_hours
         if rec["erddap_down"]:
             raise FetchError("Connection timed out")
         return rec["new_run"] or force
@@ -55,6 +56,13 @@ def test_quiet_hour_is_one_cheap_check(calls):
     assert calls["build"] == 1          # only the coverage-end check inside build()
     assert calls["thredds"] == [] and calls["obs"] == 0
     assert out == "changed=false"
+
+
+def test_refresh_hours_reach_build(calls):
+    run(calls)
+    assert calls["refresh_hours"] == 0  # default: rebuild only on a new run
+    run(calls, "--refresh-every-hours", "6")
+    assert calls["refresh_hours"] == 6
 
 
 def test_observations_refresh_when_due(calls):

@@ -3,6 +3,8 @@ name: Forecast data
 # Hourly light check (one ~13 KB request to ERDDAP). Heavier work only when needed:
 #  - new WRF run complete -> rebuild the site's forecast JSON and archive the
 #    run exactly as issued from PacIOOS THREDDS (archive/forecast/);
+#  - every ~6 h with the same run -> rebuild it anyway, for fresh waves, sea
+#    temperature and tides (PacIOOS skips a day of WRF every week or so);
 #  - every ~6 h -> merge the last 7 days of observed wind (Kahului Harbor +
 #    Airport) into archive/obs/.
 # When anything changed it force-pushes the data dir to the orphan `data`
@@ -87,7 +89,7 @@ jobs:
           python -m makani.build --out ../data
           --forecast-days ${{ inputs.forecast_days || 10 }}
           --obs-days ${{ inputs.obs_days || 7 }}
-          ${{ github.event_name == 'schedule' && '--obs-every-hours 6' || '' }}
+          ${{ github.event_name == 'schedule' && '--obs-every-hours 6 --refresh-every-hours 6' || '' }}
           ${{ inputs.force && '--force' || '' }}
 
       - name: Publish to data branch

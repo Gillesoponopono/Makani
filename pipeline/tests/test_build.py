@@ -187,6 +187,24 @@ def test_unchanged_run_is_skipped_and_force_rebuilds(tmp_path):
     assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(end="2026-11-19T00:00:00Z")) is True
 
 
+def test_unchanged_run_is_refreshed_every_refresh_hours(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    fetch = FakeFetch()
+    assert build_mod.build(tmp_path, now=NOW + timedelta(hours=5), fetch=fetch, refresh_hours=6) is False
+    assert len(fetch.urls) == 1  # only the info request
+    later = NOW + timedelta(hours=6)
+    assert build_mod.build(tmp_path, now=later, fetch=FakeFetch(), refresh_hours=6) is True
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert meta["generatedAt"] == later.strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert meta["wrf"]["coverageEnd"] == "2026-11-18T00:00:00Z"
+
+
+def test_meta_records_the_model_run(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert meta["wrf"]["run"] == "2026-11-11T00:00:00Z"  # coverage end - 168 h
+
+
 def test_bad_data_publishes_nothing(tmp_path):
     with pytest.raises(ValidationError):
         build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(n_hours=10))

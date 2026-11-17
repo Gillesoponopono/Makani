@@ -1,12 +1,14 @@
 """Build the static forecast JSON consumed by the site.
 
 Usage:
-    python -m makani.build --out web/public/data [--force]
+    python -m makani.build --out web/public/data [--force] [--refresh-every-hours H]
         [--forecast-days N] [--obs-days N] [--obs-every-hours H] [--skip-obs]
 
 Designed to run hourly as a cheap check:
 1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end;
-   the spot JSON is rebuilt only when it changes, i.e. a new run is complete.
+   the spot JSON is rebuilt when it changes, i.e. a new run is complete, and
+   otherwise every H hours (--refresh-every-hours) so waves, sea temperature
+   and tides stay fresh while PacIOOS skips a day of the wind model.
    A rebuild also adds the adjusted wind (config/calibration.json, adjust.py),
    waves (PacIOOS SWAN + WW3, waves.py), sea temperature
    (PacIOOS ROMS, water.py) and tides (NOAA CO-OPS, tides.py); those are
@@ -136,9 +138,18 @@ def add_tides(docs: list[dict[str, Any]], spots_cfg: dict[str, Any], tz: tzinfo,
     return status
 
 
-def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
+def _hours_since(iso: str | None, now: datetime) -> float | None:
+    try:
+        return (now - _parse_z(iso)).total_seconds() / 3600 if iso else None
+    except ValueError:
+        return None
+
+
+def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: datetime | None = None,
           fetch: erddap.Fetcher = erddap.http_get, config_dir: Path | None = None) -> bool:
-    """Fetch and write all files. Returns False when the model run is unchanged."""
+    """Fetch and write all files. Returns False when nothing was rebuilt: the model
+    run is unchanged and the last build is less than `refresh_hours` old (0 = never
+    rebuild an unchanged run)."""
     spots_cfg = load_spots(config_dir)
     ratings = load_ratings(config_dir)
     tz = local_tz(spots_cfg)
@@ -148,8 +159,12 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
     prev = read_json(out_dir / "meta.json")
     if (not force and prev and prev.get("schemaVersion") == SCHEMA_VERSION
             and prev.get("wrf", {}).get("coverageEnd") == cov_end):
-        print(f"WRF run unchanged (coverage end {cov_end}); nothing to do.")
-        return False
+        age = _hours_since(prev.get("generatedAt"), now)
+        if refresh_hours <= 0 or (age is not None and age < refresh_hours - 0.5):
+            print(f"WRF run unchanged (coverage end {cov_end}); nothing to do.")
+            return False
+        print(f"WRF run unchanged (coverage end {cov_end}), last build "
+              f"{'unknown' if age is None else f'{age:.1f} h'} ago: refreshing waves, sea temperature and tides.")
 
     # Start at local midnight so "today" shows all 24 hours (past hours come from analysis).
     midnight_local = now.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -204,6 +219,9 @@ def build(out_dir: Path, *, force: bool = False, now: datetime | None = None,
         "wrf": {
             "dataset": erddap.DATASET,
             "coverageEnd": cov_end,
+            # The run's start: ERDDAP's coverage end only moves once a new run is
+            # (almost) complete, and runs last RUN_LENGTH (168 h).
+            "run": _iso_z(_parse_z(cov_end) - thredds.RUN_LENGTH),
             "start": hours0[0]["t"],
             "end": hours0[-1]["t"],
             "hours": len(hours0),
@@ -237,6 +255,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True, help="output directory (e.g. web/public/data)")
     ap.add_argument("--force", action="store_true", help="rebuild even if the model run is unchanged")
+    ap.add_argument("--refresh-every-hours", type=float, default=0,
+                    help="rebuild an unchanged model run once the last build is H hours old, for fresh "
+                         "waves, sea temperature and tides (0 = only on a new run)")
     ap.add_argument("--forecast-days", type=float, default=DEFAULT_FORECAST_DAYS,
                     help="archive missing THREDDS runs from the last N days (e.g. 400 to backfill)")
     ap.add_argument("--obs-days", type=float, default=obs.NWS_MAX_DAYS,
@@ -256,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     # job once the site's data is more than STALE_HOURS old.
     forecast_error = None
     try:
-        forecast_changed = build(args.out, force=args.force, now=now)
+        forecast_changed = build(args.out, force=args.force, refresh_hours=args.refresh_every_hours, now=now)
     except FetchError as exc:
         forecast_changed, forecast_error = False, str(exc)
         print(f"::warning::site forecast not updated, PacIOOS ERDDAP unreachable: {exc}")

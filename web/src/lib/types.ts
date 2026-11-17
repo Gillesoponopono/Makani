@@ -99,7 +99,8 @@ export interface Meta {
   generatedAt: string
   timezone: string
   utcOffsetHours: number
-  wrf: { dataset: string; coverageEnd: string; start: string; end: string; hours: number; status: string }
+  /** run: when the model run started (UTC), from data built after 2026-11-17 */
+  wrf: { dataset: string; coverageEnd: string; run?: string; start: string; end: string; hours: number; status: string }
   ratings: { gustFactor: number; tooLightBelowKn: number; sports: SportBand[] }
   spots: { id: string; name: string; displayName: string; beach?: { lat: number; lon: number } }[]
   map?: { file: string; hours: number; grid: [number, number] }

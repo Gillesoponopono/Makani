@@ -2,6 +2,7 @@
   // "Guide & sources" (menu → #/guide): how to read the forecast, where the data comes
   // from, and the usual warning. Kept off the forecast screen so it stays uncluttered.
   import { dateLong, timeAgo } from '../lib/format'
+  import { runLabel } from '../lib/freshness'
   import type { Meta, SpotDoc } from '../lib/types'
 
   let { meta, docs, backHref, backName }: { meta: Meta; docs: SpotDoc[]; backHref: string; backName: string } = $props()
@@ -13,8 +14,8 @@
   <a class="back" href={backHref}>← {backName}</a>
   <h1 class="display">Guide &amp; sources</h1>
   <p class="lede">
-    How to read Makani's forecast, where every number comes from, and what it can't tell you. Model run through
-    {dateLong(meta.wrf.end.slice(0, 10))}, updated {timeAgo(meta.generatedAt)}.
+    How to read Makani's forecast, where every number comes from, and what it can't tell you. Wind model run of
+    {runLabel(meta)}, through {dateLong(meta.wrf.end.slice(0, 10))}; data refreshed {timeAgo(meta.generatedAt)}.
   </p>
 
   <section class="card">
@@ -74,6 +75,12 @@
       </dd>
       <dt>Water</dt>
       <dd>Sea surface temperature from the PacIOOS ROMS ocean model, just offshore.</dd>
+      <dt>Updates</dt>
+      <dd>
+        The wind model runs once a day; PacIOOS publishes each run about a day after it starts, and sometimes skips a
+        day. Makani checks for a new run several times a day and refreshes waves, sea temperature and tides every 6 hours. A banner appears
+        when the wind run is late.
+      </dd>
       <dt>Units</dt>
       <dd>Wind in knots, mph or km/h. Heights follow the temperature choice: metres with °C, feet with °F.</dd>
       <dt>Map</dt>

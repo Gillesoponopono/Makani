@@ -5,7 +5,8 @@
   import SpotDays from './routes/SpotDays.svelte'
   import Guide from './routes/Guide.svelte'
   import { loadMeta, loadSpot } from './lib/data'
-  import { addDays, ageHours, groupByDay, nowHoursHst, todayKey } from './lib/format'
+  import { addDays, groupByDay, nowHoursHst, todayKey } from './lib/format'
+  import { freshness } from './lib/freshness'
   import { GUIDE_HASH, parseRoute, routeHash, type View } from './lib/route'
   import { loadPrefs, savePrefs, type Prefs, type TempUnit, type WindUnit } from './lib/units'
   import type { Meta, SpotDoc } from './lib/types'
@@ -94,7 +95,7 @@
     { id: 'tomorrow', label: 'Tomorrow', href: routeHash(spotId, 'tomorrow') },
     { id: 'days', label: `${dayCount} Days`, href: routeHash(spotId, 'days') },
   ]}
-  {@const age = ageHours(meta.generatedAt)}
+  {@const stale = freshness(meta)}
 
   <header class="top">
     <div class="bar">
@@ -147,10 +148,8 @@
   </header>
 
   <main>
-    {#if age > 36}
-      <p class="banner bad" role="alert">Forecast data is {Math.round(age)} hours old. The model server may be down; treat it with caution.</p>
-    {:else if age > 18}
-      <p class="banner warn" role="status">Forecast data is {Math.round(age)} hours old.</p>
+    {#if stale}
+      <p class="banner {stale.level}" role={stale.level === 'bad' ? 'alert' : 'status'}>{stale.text}</p>
     {/if}
 
     {#if route.page === 'guide'}
