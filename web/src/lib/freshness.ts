@@ -32,8 +32,12 @@ export function runLabel(meta: Meta): string {
   return `${dateLong(hst.slice(0, 10))}, ${hourLabel(hst)}`
 }
 
+/** True when at least one spot has the NWS forecast, which keeps coming when WRF is late. */
+const hasNws = (meta: Meta) => Object.values(meta.nws?.spots ?? {}).includes('ok')
+
 export function freshness(meta: Meta, now = Date.now()): Freshness | null {
   const runAge = ageHours(runStart(meta), now)
+  const nws = hasNws(meta) ? ' The NWS line (dotted) is up to date.' : ''
   const refreshAge = ageHours(meta.generatedAt, now)
   const run = runLabel(meta)
   if (refreshAge > REFRESH_LATE_HOURS) {
@@ -45,13 +49,13 @@ export function freshness(meta: Meta, now = Date.now()): Freshness | null {
   if (runAge > RUN_VERY_LATE_HOURS) {
     return {
       level: 'bad',
-      text: `The wind forecast comes from the model run of ${run}, ${Math.floor(runAge / 24)} days ago: the University of Hawaiʻi model hasn't published a newer one. Treat it with caution.`,
+      text: `The wind forecast comes from the model run of ${run}, ${Math.floor(runAge / 24)} days ago: the University of Hawaiʻi model hasn't published a newer one. Treat it with caution.${nws}`,
     }
   }
   if (runAge > RUN_LATE_HOURS) {
     return {
       level: 'warn',
-      text: `The wind forecast comes from the model run of ${run}: the University of Hawaiʻi model hasn't published a newer one yet. It still covers until ${dateLong(meta.wrf.end.slice(0, 10))}, less reliable for the later days.`,
+      text: `The wind forecast comes from the model run of ${run}: the University of Hawaiʻi model hasn't published a newer one yet. It still covers until ${dateLong(meta.wrf.end.slice(0, 10))}, less reliable for the later days.${nws}`,
     }
   }
   return null

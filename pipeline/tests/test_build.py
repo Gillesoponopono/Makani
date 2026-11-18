@@ -70,10 +70,23 @@ def tide_json(url: str) -> bytes:
     return json.dumps({"predictions": preds}).encode()
 
 
+def nws_json(down: bool = False) -> bytes:
+    """18.52 km/h (10 kn) for the first 12 hours, then 37.04 km/h (20 kn); gusts on the first run only."""
+    t0 = START.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    t1 = (START + timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    return json.dumps({"properties": {
+        "updateTime": "2026-11-13T21:05:00+00:00",
+        "windSpeed": {"uom": "wmoUnit:km_h-1", "values": [{"validTime": f"{t0}/PT12H", "value": 18.52},
+                                                           {"validTime": f"{t1}/P1DT6H", "value": 37.04}]},
+        "windGust": {"uom": "wmoUnit:km_h-1", "values": [{"validTime": f"{t0}/PT12H", "value": 27.78}]},
+        "windDirection": {"uom": "wmoUnit:degree_(angle)", "values": [{"validTime": f"{t0}/P2D", "value": 70}]},
+    }}).encode()
+
+
 class FakeFetch:
-    def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, tides_down=False, **kw):
+    def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, tides_down=False, nws_down=False, **kw):
         self.end, self.n_hours, self.kw, self.urls = end, n_hours, kw, []
-        self.tides_down = tides_down
+        self.tides_down, self.nws_down = tides_down, nws_down
 
     def __call__(self, url):
         self.urls.append(url)
@@ -81,6 +94,10 @@ class FakeFetch:
             if self.tides_down:
                 raise build_mod.FetchError("NOAA down")
             return tide_json(url)
+        if "api.weather.gov" in url:
+            if self.nws_down:
+                raise build_mod.FetchError("HTTP 500 for api.weather.gov")
+            return nws_json()
         if "/swan_maui." in url:
             return wave_table(self.n_hours, ["shgt", "pper", "pdir"], [1.2, 14.7, 345])
         if "/ww3_hawaii." in url:
@@ -137,7 +154,7 @@ def test_build_writes_spots_and_meta(tmp_path):
 def test_build_adds_waves_water_and_tides(tmp_path):
     build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
     meta = json.loads((tmp_path / "meta.json").read_text())
-    assert meta["schemaVersion"] == 5
+    assert meta["schemaVersion"] == 6
     assert meta["water"] == {"dataset": "roms_hiig", "spots": {s: "ok" for s in
                              ["kanaha", "sprecks", "harbor", "hookipa", "maui-sunset", "keawakapu"]}}
     assert meta["tides"]["stations"] == {"1615202": "ok", "1615680": "ok"}
@@ -245,6 +262,25 @@ def test_build_adds_the_sky(tmp_path):
     assert by_t["2026-11-13T05"]["sky"] == "rain"            # 0.36 mm/h before dawn
     assert by_t["2026-11-13T22"]["sky"] is None              # night
     assert by_t["2026-11-13T07"]["sky"] is not None          # low sun: borrowed from a later hour
+
+
+def test_build_adds_the_nws_forecast(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    doc = json.loads((tmp_path / "spots" / "kanaha.json").read_text())
+    assert doc["nws"] == {"status": "ok", "gridpoint": "HFO/213,126", "updated": "2026-11-13T21:05:00Z"}
+    by_t = {h["t"][:13]: h for h in doc["hours"]}
+    assert by_t["2026-11-13T00"]["nws"] == {"kn": 10.0, "gust": 15.0, "dir": 70}
+    assert by_t["2026-11-13T12"]["nws"] == {"kn": 20.0, "gust": None, "dir": 70}
+    assert by_t["2026-11-15T12"]["nws"] is None              # past the NWS runs
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert set(meta["nws"]["spots"].values()) == {"ok"}
+
+
+def test_nws_outage_never_blocks_the_wind(tmp_path):
+    assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(nws_down=True)) is True
+    doc = json.loads((tmp_path / "spots" / "kanaha.json").read_text())
+    assert doc["nws"]["status"] == "error"
+    assert all(h["nws"] is None for h in doc["hours"])
 
 
 def test_build_adds_the_adjusted_wind_where_calibrated(tmp_path):

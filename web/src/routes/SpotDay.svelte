@@ -105,6 +105,7 @@
 
   let tableOpen = $state(false)
   const hasWaves = $derived(doc.hours.some((h) => h.wave))
+  const hasNws = $derived(doc.hours.some((h) => h.nws))
 </script>
 
 {#if !day}
@@ -143,6 +144,7 @@
         <li><span class="key wind-key"></span>Wind</li>
         <li><span class="key gust-key"></span>Gusts <span class="est">(est.)</span></li>
         {#if doc.adjusted}<li><span class="key adj-key"></span>Adjusted</li>{/if}
+        {#if hasNws}<li><span class="key nws-key"></span>NWS</li>{/if}
       </ul>
     </header>
     <WindChart
@@ -176,6 +178,7 @@
               <th scope="col">Wind</th>
               <th scope="col">Gust*</th>
               {#if doc.adjusted}<th scope="col">Adj.</th>{/if}
+              {#if hasNws}<th scope="col">NWS</th>{/if}
               <th scope="col">Direction</th>
               {#if hasWaves}<th scope="col">Waves</th>{/if}
               {#if doc.tide}<th scope="col">Tide</th>{/if}
@@ -190,6 +193,11 @@
                 <td><span class="kn kn-{knBand(h.wrf.kn)}">{windLabel(h.wrf.kn, wind)}</span></td>
                 <td class="num muted">{windLabel(h.wrf.gustEst, wind)}</td>
                 {#if doc.adjusted}<td class="num">{h.wrf.knAdj != null ? windLabel(h.wrf.knAdj, wind) : '–'}</td>{/if}
+                {#if hasNws}
+                  <td class="num">
+                    {#if h.nws}{windLabel(h.nws.kn, wind)}{#if h.nws.gust != null}<span class="muted">/{windLabel(h.nws.gust, wind)}</span>{/if}{:else}–{/if}
+                  </td>
+                {/if}
                 <td class="dirc" title="From {compass(h.wrf.dir)} ({h.wrf.dir}°). {SECTOR[h.sector].label}">
                   <Arrow dir={h.wrf.dir} size={14} />
                   {compass(h.wrf.dir)}
@@ -221,7 +229,7 @@
         </table>
       </div>
       <p class="chart-note">
-        Wind and gust in {windUnitLabel(wind)}. *Estimated gust.{#if doc.adjusted} Adj.: adjusted forecast.{/if} ✓ good, ~ OK, · poor, ⚠ offshore direction.{#if hasWaves}
+        Wind and gust in {windUnitLabel(wind)}. *Estimated gust.{#if doc.adjusted} Adj.: adjusted forecast.{/if}{#if hasNws} NWS: National Weather Service forecast, wind/gust.{/if} ✓ good, ~ OK, · poor, ⚠ offshore direction.{#if hasWaves}
           Waves in {lengthUnit(temp)}, period in seconds.{/if}
       </p>
     {/if}
@@ -358,6 +366,11 @@
     border-top: 2px dashed var(--adj);
     border-radius: 0;
   }
+  .nws-key {
+    height: 0;
+    border-top: 3px dotted var(--nws);
+    border-radius: 0;
+  }
   .chart-note {
     margin: 8px 0 0;
     color: var(--faint);
@@ -473,8 +486,15 @@
       font-size: 1.15rem;
     }
     .legend {
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 6px 12px;
       font-size: 0.8rem;
+    }
+    .legend li {
+      gap: 6px;
+    }
+    .legend .key {
+      width: 16px;
     }
     .opt {
       display: none;

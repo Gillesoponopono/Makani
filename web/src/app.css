@@ -37,6 +37,7 @@
   --wind-kn6: #d38cff;
   --gust: #8ea6bb;
   --adj: #f2f6ff; /* adjusted forecast: dashed, near white */
+  --nws: #ff8ccf; /* NWS forecast: dotted pink */
   /* Sea: wave cells (one hue, stronger with size) and the tide curve. */
   --wave: #38b6e8;
   --tide: #8f9dff;

@@ -40,6 +40,11 @@ describe('freshness', () => {
     expect(f.text).toContain('University of Hawaiʻi')
     expect(f.text).toContain('until Sat, Nov 21')
   })
+  it('points to the NWS line when there is one', () => {
+    const m = { ...meta({}, '2026-11-17T08:00:00Z'), nws: { source: 'NWS', spots: { kanaha: 'ok' } } }
+    expect(freshness(m, at('2026-11-17T10:00:00Z'))!.text).toContain('The NWS line (dotted) is up to date.')
+    expect(freshness(meta({}, '2026-11-17T08:00:00Z'), at('2026-11-17T10:00:00Z'))!.text).not.toContain('NWS')
+  })
   it('turns red when two runs are missing', () => {
     const f = freshness(meta({}, '2026-11-18T09:00:00Z'), at('2026-11-18T10:00:00Z'))! // 82 h
     expect(f.level).toBe('bad')

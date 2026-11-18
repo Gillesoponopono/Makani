@@ -19,6 +19,14 @@ export interface Hour {
   waterC?: number | null // sea surface °C (PacIOOS ROMS); missing before schema 4
   sky?: Sky | null // from the model's sunshine and rain (schema 5); null at night without rain
   sun?: number | null // share of a clear sky's sunshine reaching the ground, daylight only
+  nws?: NwsHour | null // NWS forecast grid (schema 6); null outside its runs
+}
+
+/** The National Weather Service forecast for the hour: knots, real gusts, "from" degrees. */
+export interface NwsHour {
+  kn: number
+  gust: number | null
+  dir: number | null
 }
 
 export type Sky = 'sun' | 'partly' | 'cloud' | 'rain'
@@ -76,6 +84,7 @@ export interface SpotDoc {
   waves?: { status: 'ok' | 'sheltered' | 'error' | 'none'; swanCell?: { lat: number; lon: number }; ww3Cell?: { lat: number; lon: number } | null }
   tide?: Tide | null
   water?: { status: 'ok' | 'error' | 'none'; cell?: { lat: number; lon: number } }
+  nws?: { status: 'ok' | 'error' | 'none'; gridpoint?: string; updated?: string | null }
   /** Where the adjusted forecast comes from; null for spots without a nearby anemometer. */
   adjusted?: {
     reference: string
@@ -107,4 +116,5 @@ export interface Meta {
   waves?: { datasets: string[]; spots: Record<string, string> }
   tides?: { source: string; stations: Record<string, string> }
   water?: { dataset: string; spots: Record<string, string> }
+  nws?: { source: string; spots: Record<string, string> }
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   // One day of wind for a spot: wind and estimated-gust curves on one axis (plus the
-  // adjusted forecast, dashed, where the spot has one), the best session
+  // adjusted forecast, dashed, where the spot has one, and the NWS forecast, dotted), the best session
   // highlighted, and a strip of direction arrows under the time axis.
   // Below, on the same time axis: a sky strip (sun, cloud, showers by hour), a wave
   // strip (3-hour cells with height and period, the wave type underneath) and a
@@ -151,6 +151,12 @@
     segments(
       series.map((h) => (h && h.wrf.knAdj != null ? h : null)),
       (h, i) => [x(tAt(i)), y(val(h.wrf.knAdj!))] as Pt,
+    ),
+  )
+  const nwsRuns = $derived(
+    segments(
+      series.map((h) => (h?.nws ? h : null)),
+      (h, i) => [x(tAt(i)), y(val(h.nws!.kn))] as Pt,
     ),
   )
   const ticks = $derived(axisTicks(yMax))
@@ -310,6 +316,9 @@
         {#each windRuns as run, k (k)}
           <path class="wind" d={monotonePath(run)} stroke="url(#band-{uid})" />
         {/each}
+        {#each nwsRuns as run, k (k)}
+          <path class="nws" d={monotonePath(run)} />
+        {/each}
         {#each adjRuns as run, k (k)}
           <path class="adj" d={monotonePath(run)} />
         {/each}
@@ -331,6 +340,9 @@
         <line class="cross" x1={x(focus)} x2={x(focus)} y1={T - 4} y2={height - 2} />
         <circle class="dot" cx={x(focus)} cy={y(val(focusHour.wrf.gustEst))} r="4" style:fill="var(--gust)" />
         <circle class="dot" cx={x(focus)} cy={y(val(focusHour.wrf.kn))} r="5" style:fill={bandVar(focusHour.wrf.kn)} />
+        {#if focusHour.nws}
+          <circle class="dot nws-dot" cx={x(focus)} cy={y(val(focusHour.nws.kn))} r="4" />
+        {/if}
         {#if focusHour.wrf.knAdj != null}
           <circle class="dot adj-dot" cx={x(focus)} cy={y(val(focusHour.wrf.knAdj))} r="4" />
         {/if}
@@ -442,6 +454,12 @@
           <div class="row"><span class="key gust"></span><strong>{windLabel(focusHour.wrf.gustEst, wind)} {windUnitLabel(wind)}</strong><span>gust est.</span></div>
           {#if focusHour.wrf.knAdj != null}
             <div class="row"><span class="key adj-key"></span><strong>{windLabel(focusHour.wrf.knAdj, wind)} {windUnitLabel(wind)}</strong><span>adjusted</span></div>
+          {/if}
+          {#if focusHour.nws}
+            <div class="row">
+              <span class="key nws-key"></span><strong>{windLabel(focusHour.nws.kn, wind)} {windUnitLabel(wind)}</strong>
+              <span>NWS{focusHour.nws.gust != null ? ` · gusts ${windLabel(focusHour.nws.gust, wind)}` : ''}</span>
+            </div>
           {/if}
           <div class="row">
             <svg class="s-{focusHour.sector}" viewBox="-12 -12 24 24" width="13" height="13" aria-hidden="true">
@@ -574,6 +592,22 @@
   }
   .adj-dot {
     fill: var(--adj);
+  }
+  .nws {
+    fill: none;
+    stroke: var(--nws);
+    stroke-width: 3.4;
+    stroke-dasharray: 0.1 6.5;
+    stroke-linecap: round;
+    opacity: 0.95;
+  }
+  .nws-dot {
+    fill: var(--nws);
+  }
+  .key.nws-key {
+    height: 0;
+    border-top: 3px dotted var(--nws);
+    border-radius: 0;
   }
   .key.adj-key {
     height: 0;

@@ -44,7 +44,7 @@ Local and visiting kiters of mixed skill. Visitors need clear verdicts and safet
 |---|---|---|---|
 | **PacIOOS WRF `wrf_mo`** (ERDDAP griddap) | 10 m wind U/V, air temp, rain, ~2 km grid, hourly — the site's current forecast | GitHub Action | hourly check, full fetch for a new complete run and every ~6 h with the same run |
 | **PacIOOS WRF individual runs** (THREDDS `wrf_mo/runs`, NCSS point CSV) | Every run since 2010-05-14, exactly as issued | GitHub Action → forecast archive | when a new run is complete; one-off backfill |
-| **NWS gridpoint raw forecast** (`api.weather.gov/gridpoints/HFO/x,y`) | Hourly wind speed, **gusts** and direction per spot (second opinion) | GitHub Action | every 6 h |
+| **NWS gridpoint raw forecast** (`api.weather.gov/gridpoints/HFO/x,y`) | Hourly wind speed, **gusts** and direction per spot (second opinion, built: `makani/nws.py`) | GitHub Action | with each build: new WRF run or every 6 h |
 | **NOAA CO-OPS Kahului Harbor wind** (station `1615680`, `product=wind`) | Measured wind, direction, gusts on the waterfront, 6-min data, **years of history** | GitHub Action → observation archive | every ~6 h (last 7 days re-merged); one-off backfill |
 | **NWS observations** (`/stations/PHOG/observations`) | Measured wind and gusts at Kahului Airport (ASOS) | **Browser, live** for "now" (API sends `Access-Control-Allow-Origin: *`), plus the Action → observation archive | on page load / every 10 min while open; Action every 6 h |
 | **NWS active alerts** (`/alerts/active?zone=…`) | Wind Advisory, Small Craft Advisory, High Surf, etc. | Browser live + Action (for alert emails) | on page load / every 6 h |
@@ -142,7 +142,7 @@ The pipeline still tags each hour with the sports its **WRF sustained wind** sui
 - Offshore and poor hours never count as kiteable or toward an alert.
 
 ### 5.3 Gusts
-WRF has no gust field. Show an **estimated gust = sustained × 1.3** (factor in `config/ratings.json`), always labeled "est." with an explanation in About. The NWS gust forecast appears beside it as a real second opinion (§8.3). Ratings and alerts use sustained WRF wind only.
+WRF has no gust field. Show an **estimated gust = sustained × 1.3** (factor in `config/ratings.json`), always labeled "est." with an explanation in About. The NWS gust forecast appears beside it as a real second opinion (readout and hourly table). Ratings and alerts use sustained WRF wind only.
 
 ### 5.4 Reliability
 Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5+ marked "low confidence".
@@ -195,7 +195,7 @@ Day 1–2 normal. Day 3–4 marked "lower confidence" with a subtle hatch. Day 5
    - Map (M2): `Uwind,Vwind` over the Maui box lat **20.50–21.10**, lon **−156.72 to −155.95**, stride 2.
    - Timeout 300 s, 3 retries with exponential backoff; HTML proxy-error pages are treated as failures.
 3. **Build spot series** (§7.4) and **map frames** (§7.5).
-4. **NWS:** gridpoint raw forecasts per spot (expand intervals to hourly, km/h → kn); active alerts for `PHZ117,PHZ119,HIZ045,HIZ049`; latest CWF product → split out the PHZ117/PHZ119 sections.
+4. **NWS:** gridpoint raw forecasts per spot (built, `makani/nws.py`, an extra like waves: a failure is a warning): `api.weather.gov/gridpoints/HFO/x,y`, `windSpeed`, `windGust`, `windDirection`, each a list of `start/duration` runs (often 6–24 h) expanded to hourly, km/h → kn, one request per distinct gridpoint, kept to the WRF hours. Forecasters update the grid several times a day, so it keeps coming when PacIOOS skips a WRF run. Not built yet: active alerts for `PHZ117,PHZ119,HIZ045,HIZ049`; latest CWF product → split out the PHZ117/PHZ119 sections.
    **Observations** (implemented in M1, `makani/obs.py`): every run re-reads the last 7 days from Kahului Harbor (CO-OPS) and PHOG (NWS), bins them to hourly values and merges them into `archive/obs/` (§7.6). Re-reading 7 days catches PHOG values that QC fills in late. A failing station is a warning only.
 5. **Waves, sea temperature and tides** (implemented, `makani/waves.py`, `makani/water.py`, `makani/tides.py`), with each new WRF run, after the wind is built and validated. They are extras: a failure is a warning, never a reason not to publish the wind.
    - Waves: one SWAN request per spot (`shgt,pper,pdir`, local midnight → `last`) and one WW3 request per distinct offshore cell (`whgt,wper,wdir,shgt,sper,sdir`). Both datasets have a depth axis (`[(0)]`) and 0–360 longitudes. Rule for the wave type in §8.8.
@@ -248,11 +248,13 @@ archive/obs/<station>/<YYYY-MM>.json   hourly observed wind per station and HST 
         "swell": { "m": 1.96, "per": 12.9, "dir": 350 },  // WW3 offshore split; chop is null when it blows out to sea
         "chop":  { "m": 1.61, "per": 7.4, "dir": 69 }
       },
-      "waterC": 25.6                                      // ROMS sea surface °C, null without a value
+      "waterC": 25.6,                                     // ROMS sea surface °C, null without a value
+      "nws": { "kn": 18.0, "gust": 24.0, "dir": 70 }      // NWS forecast grid (schema 6), null outside its runs
     }
   ],
   "waves": { "status": "ok", "swanCell": { "lat": 20.905, "lon": -156.445 }, "ww3Cell": { "lat": 20.95, "lon": -156.45 } },
   "water": { "status": "ok", "cell": { "lat": 20.931, "lon": -156.444 } },
+  "nws": { "status": "ok", "gridpoint": "HFO/213,126", "updated": "2026-11-17T17:37:08Z" },
   "tide": {                                               // null if the spot has no station
     "station": "1615680", "name": "Kahului Harbor", "kind": "harmonic", "datum": "MLLW", "units": "ft",
     "curve": { "start": "2026-11-13T00:00:00-10:00", "stepMinutes": 60, "ft": [0.59, 1.05, "..."] },
@@ -323,11 +325,11 @@ Implemented in M2 (`makani/mapframes.py`), box and stride in `config/map.json`. 
 
 ### 8.2 Spot day `#/<spot>/<day>`
 1. **Hero:** "Tomorrow / at Kanahā (Kite Beach)", the date, a lower-confidence tag from day 3, and **four day tiles** (`DayTiles.svelte`, `lib/summary.ts`) over the day's daylight hours: **Wind** "15–21 kn" with the speed-weighted mean direction and top gust ("ENE · gusts to 27"); **Sky & air** "24–26 °C" with the day's sky icon and words ("Sunny", "Mostly sunny, passing showers", "Showers likely"); **Water** "26 °C" (sea surface, ROMS); **Waves** "1.1–1.3 m" with the period range and the most common type ("15–17 s · Swell + chop"), "Flat" under 0.3 m or at the sheltered harbor. Units follow the toggles. The stats under the chart give the same things for the selected hour. On wide screens the island picture fills the right of the hero (§8.4); on phones it sits under the title.
-2. **Wind Forecast** card (`WindChart.svelte`, geometry in `lib/chart.ts`): wind (3 px, coloured hour by hour by the knots scale, blue → green → yellow → orange) and estimated gusts (grey) on one axis shared by all days of the spot, in the chosen unit; the **adjusted forecast** dashed near-white where the spot has one (legend "Adjusted", explained in the note under the chart); area under the wind fading out; **best session** shaded amber with its bounds labelled on the time axis; the session's peak labelled ("21 kn"); night shaded; "NOW" line on today; a strip of **direction arrows** under the time axis coloured by sector (good / OK / poor / offshore). Hover, tap or keys select an hour: crosshair + readout, and the hero map and the stats follow that hour.
+2. **Wind Forecast** card (`WindChart.svelte`, geometry in `lib/chart.ts`): wind (3 px, coloured hour by hour by the knots scale, blue → green → yellow → orange) and estimated gusts (grey) on one axis shared by all days of the spot, in the chosen unit; the **adjusted forecast** dashed near-white where the spot has one (legend "Adjusted"); the **NWS forecast** dotted pink (legend "NWS"; readout "18 kn NWS · gusts 24"; coarse steps, as the grid has one value per 6–24 h); area under the wind fading out; **best session** shaded amber with its bounds labelled on the time axis; the session's peak labelled ("21 kn"); night shaded; "NOW" line on today; a strip of **direction arrows** under the time axis coloured by sector (good / OK / poor / offshore). Hover, tap or keys select an hour: crosshair + readout, and the hero map and the stats follow that hour.
    Under the arrows, on the same time axis: the **wave strip** and the **tide panel** (§8.8).
 3. **Stats** card, 3 × 2 (2 × 3 on phones): direction (arrow, compass point, words, sector note), waves, tide, air temperature with the hour's sky icon and word (tap to switch °C/°F), sunrise, sunset. All but the sun follow the selected hour, else the current hour (today) or the session peak.
-4. **Hourly table** (collapsed): time, wind badge, gust, direction + sector mark, waves (height, period, type), tide, air, rain.
-- Later (M4): NWS second opinion, live observations, marine text.
+4. **Hourly table** (collapsed): time, wind badge, gust, adjusted, NWS (wind/gust), direction + sector mark, waves (height, period, type), tide, air, sky.
+- Later (M4): live observations, marine text.
 
 ### 8.3 Next days `#/<spot>/days`
 One row per forecast day: name and date, confidence tag, best session and range, the daylight wave range and most common type ("Waves 1.1–1.3 m · swell + chop"), a small chart (same axis for all rows), daylight peak with direction. A row opens that day.
@@ -376,7 +378,7 @@ Checked on 2026-11-13 data: Kanahā 1.1–1.4 m, mostly mixed (≈ 1.6 m of 7 s 
 ### 8.10 Old-forecast banner (built)
 Two clocks (`web/src/lib/freshness.ts`): the WRF run (`meta.wrf.run`, or coverage end − 168 h for older data) and Makani's refresh (`meta.generatedAt`, every ~6 h). A run is normally published about a day after it starts and replaced a day later.
 - Refresh older than 24 h: yellow "Forecast data last refreshed N hours ago (wind model run of …). The model server may be unreachable", red once the run is also > 80 h old.
-- Otherwise run older than 56 h (the next run is late): yellow "The wind forecast comes from the model run of Sat, Nov 14, 2 PM: the University of Hawaiʻi model hasn't published a newer one yet. It still covers until …".
+- Otherwise run older than 56 h (the next run is late): yellow "The wind forecast comes from the model run of Sat, Nov 14, 2 PM: the University of Hawaiʻi model hasn't published a newer one yet. It still covers until …", plus "The NWS line (dotted) is up to date." when the NWS forecast is there.
 - Run older than 80 h (two runs missed): red, "treat it with caution".
 
 **On the chart** (no second y-axis on the wind plot):

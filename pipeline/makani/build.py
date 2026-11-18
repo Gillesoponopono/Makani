@@ -11,8 +11,9 @@ Designed to run hourly as a cheap check:
    and tides stay fresh while PacIOOS skips a day of the wind model.
    A rebuild also adds the adjusted wind (config/calibration.json, adjust.py),
    waves (PacIOOS SWAN + WW3, waves.py), sea temperature
-   (PacIOOS ROMS, water.py) and tides (NOAA CO-OPS, tides.py); those are
-   extras and never block the wind.
+   (PacIOOS ROMS, water.py), tides (NOAA CO-OPS, tides.py) and the NWS
+   forecast as a second opinion (nws.py); those are extras and never block
+   the wind.
 2. Forecast archive (THREDDS): when a new run is out (or with --force, or a
    non-default --forecast-days for backfill), every complete run of the last
    N days that isn't archived yet is saved exactly as issued.
@@ -33,7 +34,7 @@ from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 
-from . import SCHEMA_VERSION, adjust, archive, erddap, mapframes, obs, sky, thredds, tides, water, waves
+from . import SCHEMA_VERSION, adjust, archive, erddap, mapframes, nws, obs, sky, thredds, tides, water, waves
 from .config import load_calibration, load_map, load_ratings, load_spots, local_tz
 from .jsonio import read_json, write_json_atomic
 from .net import FetchError
@@ -188,16 +189,19 @@ def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: 
     for doc in docs:
         validate_spot(doc, sport_ids)
 
-    # Waves (PacIOOS SWAN + WW3), sea temperature (ROMS) and tides (NOAA): extras
-    # that never block the wind.
+    # Waves (PacIOOS SWAN + WW3), sea temperature (ROMS), tides (NOAA) and the NWS
+    # forecast: extras that never block the wind.
     wave_src = waves.WaveSource(start, fetch)
     water_src = water.WaterSource(start, fetch)
-    wave_status, water_status = {}, {}
+    nws_src = nws.NwsSource(fetch)
+    wave_status, water_status, nws_status = {}, {}, {}
     for spot, doc in zip(spots_cfg["spots"], docs):
         doc["waves"] = wave_src.apply(spot, doc)
         wave_status[doc["id"]] = doc["waves"]["status"]
         doc["water"] = water_src.apply(spot, doc)
         water_status[doc["id"]] = doc["water"]["status"]
+        doc["nws"] = nws_src.apply(spot, doc)
+        nws_status[doc["id"]] = doc["nws"]["status"]
     tide_status = add_tides(docs, spots_cfg, tz, out_dir, fetch)
     for doc in docs:
         validate_extras(doc)
@@ -234,6 +238,7 @@ def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: 
                 "grid": [len(frames["lats"]), len(frames["lons"])]},
         "waves": {"datasets": [waves.SWAN, waves.WW3], "spots": wave_status},
         "water": {"dataset": water.ROMS, "spots": water_status},
+        "nws": {"source": nws.SOURCE, "spots": nws_status},
         "tides": {"source": "NOAA CO-OPS predictions", "stations": tide_status},
     }
     validate_meta(meta, [d["id"] for d in docs])

@@ -51,6 +51,13 @@
           </ul>
         {/if}
       </dd>
+      <dt>NWS</dt>
+      <dd>
+        The dotted pink line is the National Weather Service forecast for the spot (Honolulu office, 2.5 km grid), with
+        its own gusts in the readout and the hourly table. Forecasters update it several times a day, so it stays
+        current when the University of Hawaiʻi model skips a run. It is coarser: one value often covers 6 to 24 hours,
+        so it doesn't show the shape of the day the way the model does.
+      </dd>
       <dt>Direction</dt>
       <dd>
         Arrows under the chart point where the wind blows: <span class="s-good">good</span>,
@@ -78,8 +85,8 @@
       <dt>Updates</dt>
       <dd>
         The wind model runs once a day; PacIOOS publishes each run about a day after it starts, and sometimes skips a
-        day. Makani checks for a new run several times a day and refreshes waves, sea temperature and tides every 6 hours. A banner appears
-        when the wind run is late.
+        day. Makani checks for a new run several times a day and refreshes waves, sea temperature, tides and the NWS
+        forecast every 6 hours. A banner appears when the wind run is late.
       </dd>
       <dt>Units</dt>
       <dd>Wind in knots, mph or km/h. Heights follow the temperature choice: metres with °C, feet with °F.</dd>
@@ -98,6 +105,10 @@
       <li>
         Waves: <a href="https://www.pacioos.hawaii.edu/waves/model-maui/">PacIOOS SWAN Maui</a> and
         <a href="https://www.pacioos.hawaii.edu/waves/model-hawaii/">WaveWatch III Hawaiʻi</a>.
+      </li>
+      <li>
+        Second opinion: <a href="https://www.weather.gov/hfo/">National Weather Service Honolulu</a> forecast grid
+        (api.weather.gov).
       </li>
       <li>Sea temperature: <a href="https://www.pacioos.hawaii.edu/currents/model-hawaii/">PacIOOS ROMS Hawaiʻi</a>.</li>
       <li>

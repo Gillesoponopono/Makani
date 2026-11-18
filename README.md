@@ -1,6 +1,6 @@
 # Makani
 
-Free kitesurf wind forecast for Maui (Kanaha, Spreckelsville, Kahului Harbor, Hoʻokipa, Maui Sunset, Keawakapu), built on the PacIOOS WRF `wrf_mo` model and NWS data, with waves (PacIOOS SWAN Maui and WaveWatch III), sea temperature (PacIOOS ROMS) and tides (NOAA CO-OPS predictions). Static site on GitHub Pages, refreshed by GitHub Actions.
+Free kitesurf wind forecast for Maui (Kanaha, Spreckelsville, Kahului Harbor, Hoʻokipa, Maui Sunset, Keawakapu), built on the PacIOOS WRF `wrf_mo` model with the NWS forecast grid as a second opinion, with waves (PacIOOS SWAN Maui and WaveWatch III), sea temperature (PacIOOS ROMS) and tides (NOAA CO-OPS predictions). Static site on GitHub Pages, refreshed by GitHub Actions.
 
 See [SPEC.md](SPEC.md) for the full specification.
 
