@@ -84,9 +84,10 @@ def nws_json(down: bool = False) -> bytes:
 
 
 class FakeFetch:
-    def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, tides_down=False, nws_down=False, **kw):
+    def __init__(self, end="2026-11-18T00:00:00Z", n_hours=98, tides_down=False, nws_down=False,
+                 latest="20261111", **kw):
         self.end, self.n_hours, self.kw, self.urls = end, n_hours, kw, []
-        self.tides_down, self.nws_down = tides_down, nws_down
+        self.tides_down, self.nws_down, self.latest = tides_down, nws_down, latest
 
     def __call__(self, url):
         self.urls.append(url)
@@ -94,6 +95,10 @@ class FakeFetch:
             if self.tides_down:
                 raise build_mod.FetchError("NOAA down")
             return tide_json(url)
+        if url.endswith("/latest.xml"):
+            if self.latest is None:
+                raise build_mod.FetchError("THREDDS down")
+            return f'<dataset urlPath="wrf_mo/files/2026/wrf_mo_{self.latest}.nc"/>'.encode()
         if "api.weather.gov" in url:
             if self.nws_down:
                 raise build_mod.FetchError("HTTP 500 for api.weather.gov")
@@ -121,7 +126,7 @@ def test_build_writes_spots_and_meta(tmp_path):
     assert meta["wrf"]["hours"] == 98
     assert [s["id"] for s in meta["spots"]] == ["kanaha", "sprecks", "harbor", "hookipa", "maui-sunset", "keawakapu"]
     # Query starts at local midnight (10:00Z).
-    assert "2026-11-13T10:00:00Z" in fetch.urls[1]
+    assert "2026-11-13T10:00:00Z" in fetch.urls[2]  # after the info request and the latest-run catalog
 
     kanaha = json.loads((tmp_path / "spots" / "kanaha.json").read_text())
     h0 = kanaha["hours"][0]
@@ -199,7 +204,7 @@ def test_unchanged_run_is_skipped_and_force_rebuilds(tmp_path):
     build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
     fetch = FakeFetch()
     assert build_mod.build(tmp_path, now=NOW, fetch=fetch) is False
-    assert len(fetch.urls) == 1  # only the info request
+    assert len(fetch.urls) == 2  # only the info request and the latest-run catalog
     assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(), force=True) is True
     assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(end="2026-11-19T00:00:00Z")) is True
 
@@ -208,7 +213,7 @@ def test_unchanged_run_is_refreshed_every_refresh_hours(tmp_path):
     build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
     fetch = FakeFetch()
     assert build_mod.build(tmp_path, now=NOW + timedelta(hours=5), fetch=fetch, refresh_hours=6) is False
-    assert len(fetch.urls) == 1  # only the info request
+    assert len(fetch.urls) == 2  # only the info request and the latest-run catalog
     later = NOW + timedelta(hours=6)
     assert build_mod.build(tmp_path, now=later, fetch=FakeFetch(), refresh_hours=6) is True
     meta = json.loads((tmp_path / "meta.json").read_text())
@@ -219,7 +224,27 @@ def test_unchanged_run_is_refreshed_every_refresh_hours(tmp_path):
 def test_meta_records_the_model_run(tmp_path):
     build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
     meta = json.loads((tmp_path / "meta.json").read_text())
-    assert meta["wrf"]["run"] == "2026-11-11T00:00:00Z"  # coverage end - 168 h
+    assert meta["wrf"]["run"] == "2026-11-11T00:00:00Z"
+
+
+def test_a_new_run_still_arriving_triggers_a_rebuild(tmp_path):
+    # Coverage end only moves once the new run passes the previous one's end; the
+    # latest-file catalog names it as soon as its first hours are up.
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch())
+    assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(latest="20261113")) is True
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert meta["wrf"]["run"] == "2026-11-13T00:00:00Z"
+    assert meta["wrf"]["coverageEnd"] == "2026-11-18T00:00:00Z"
+
+
+def test_latest_catalog_down_keeps_the_known_run(tmp_path):
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(latest="20261113"))
+    assert build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(latest=None)) is False  # no flip back
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(latest=None), force=True)
+    assert json.loads((tmp_path / "meta.json").read_text())["wrf"]["run"] == "2026-11-13T00:00:00Z"
+    # a new coverage end without the catalog: coverage end - 168 h
+    build_mod.build(tmp_path, now=NOW, fetch=FakeFetch(end="2026-11-21T00:00:00Z", latest=None))
+    assert json.loads((tmp_path / "meta.json").read_text())["wrf"]["run"] == "2026-11-14T00:00:00Z"
 
 
 def test_bad_data_publishes_nothing(tmp_path):

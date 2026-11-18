@@ -5,8 +5,9 @@ Usage:
         [--forecast-days N] [--obs-days N] [--obs-every-hours H] [--skip-obs]
 
 Designed to run hourly as a cheap check:
-1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end;
-   the spot JSON is rebuilt when it changes, i.e. a new run is complete, and
+1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end
+   and a ~7 KB THREDDS catalog names the newest run; the spot JSON is rebuilt
+   when either changes, i.e. a new run starts arriving or is complete, and
    otherwise every H hours (--refresh-every-hours) so waves, sea temperature
    and tides stay fresh while PacIOOS skips a day of the wind model.
    A rebuild also adds the adjusted wind (config/calibration.json, adjust.py),
@@ -146,6 +147,22 @@ def _hours_since(iso: str | None, now: datetime) -> float | None:
         return None
 
 
+def _model_run(cov_end: str, prev: dict[str, Any] | None, fetch: erddap.Fetcher) -> str:
+    """When the newest WRF run started. The THREDDS "latest" catalog names it as soon as
+    its first hours are up (ERDDAP's Best aggregation already serves them); coverage end
+    - 168 h is only right once a run is nearly complete, so it's the fallback."""
+    derived = _parse_z(cov_end) - thredds.RUN_LENGTH
+    try:
+        return _iso_z(max(thredds.latest_run(fetch), derived))
+    except (FetchError, ValueError) as exc:
+        prev_wrf = (prev or {}).get("wrf", {})
+        if prev_wrf.get("coverageEnd") == cov_end and prev_wrf.get("run"):
+            print(f"::warning::latest WRF run unknown ({exc}); keeping {prev_wrf['run']}")
+            return prev_wrf["run"]
+        print(f"::warning::latest WRF run unknown ({exc}); using coverage end - 168 h")
+        return _iso_z(derived)
+
+
 def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: datetime | None = None,
           fetch: erddap.Fetcher = erddap.http_get, config_dir: Path | None = None) -> bool:
     """Fetch and write all files. Returns False when nothing was rebuilt: the model
@@ -158,13 +175,14 @@ def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: 
 
     cov_end = erddap.coverage_end(fetch)
     prev = read_json(out_dir / "meta.json")
+    run = _model_run(cov_end, prev, fetch)
     if (not force and prev and prev.get("schemaVersion") == SCHEMA_VERSION
-            and prev.get("wrf", {}).get("coverageEnd") == cov_end):
+            and prev.get("wrf", {}).get("coverageEnd") == cov_end and prev["wrf"].get("run") == run):
         age = _hours_since(prev.get("generatedAt"), now)
         if refresh_hours <= 0 or (age is not None and age < refresh_hours - 0.5):
-            print(f"WRF run unchanged (coverage end {cov_end}); nothing to do.")
+            print(f"WRF run unchanged (run {run}, coverage end {cov_end}); nothing to do.")
             return False
-        print(f"WRF run unchanged (coverage end {cov_end}), last build "
+        print(f"WRF run unchanged (run {run}, coverage end {cov_end}), last build "
               f"{'unknown' if age is None else f'{age:.1f} h'} ago: refreshing waves, sea temperature and tides.")
 
     # Start at local midnight so "today" shows all 24 hours (past hours come from analysis).
@@ -223,9 +241,7 @@ def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: 
         "wrf": {
             "dataset": erddap.DATASET,
             "coverageEnd": cov_end,
-            # The run's start: ERDDAP's coverage end only moves once a new run is
-            # (almost) complete, and runs last RUN_LENGTH (168 h).
-            "run": _iso_z(_parse_z(cov_end) - thredds.RUN_LENGTH),
+            "run": run,  # newest run's start (_model_run); may still be arriving
             "start": hours0[0]["t"],
             "end": hours0[-1]["t"],
             "hours": len(hours0),

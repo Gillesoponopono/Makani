@@ -62,6 +62,26 @@ def test_list_runs_from_recorded_catalog():
     assert len(runs) == 4
 
 
+LATEST_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<catalog name="Atmosphere Model Output/Hawaii/WRF Maui-Oahu Regional Atmospheric Model" version="1.0.1">
+  <dataset name="Latest WRF Maui-Oahu Regional Atmospheric Model File" ID="wrf_mo/files/2026/wrf_mo_20261117.nc"
+           urlPath="wrf_mo/files/2026/wrf_mo_20261117.nc">
+</catalog>"""
+
+
+def test_latest_run_from_the_latest_catalog():
+    urls = []
+
+    def fetch(url):
+        urls.append(url)
+        return LATEST_XML
+
+    assert thredds.latest_run(fetch) == datetime(2026, 11, 17, tzinfo=timezone.utc)
+    assert urls == ["https://pae-paha.pacioos.hawaii.edu/thredds/catalog/wrf_mo/latest.xml"]
+    with pytest.raises(ValueError):
+        thredds.latest_run(lambda url: b"<catalog/>")
+
+
 def test_point_url():
     url = thredds.point_url(utc(2025, 11, 10), 20.92, -156.44)
     assert url == ("https://pae-paha.pacioos.hawaii.edu/thredds/ncss/grid/wrf_mo/runs/"

@@ -50,6 +50,22 @@ def run_id(init: datetime) -> str:
     return init.astimezone(timezone.utc).strftime("%Y-%m-%dT%HZ")
 
 
+LATEST_URL = f"{BASE}/catalog/wrf_mo/latest.xml"
+_LATEST_RE = re.compile(r"wrf_mo_(\d{8})\.nc")
+
+
+def latest_run(fetch: Fetcher = http_get) -> datetime:
+    """Init time of the newest run, from the ~7 KB "latest file" catalog (one file per
+    daily 00Z run). A run shows up there as soon as its first hours are uploaded, before
+    ERDDAP's coverage end moves (that only happens once the new run reaches past the
+    previous run's end)."""
+    raw = fetch(LATEST_URL).decode("utf-8", "replace")
+    m = _LATEST_RE.search(raw)
+    if not m:
+        raise ValueError("no wrf_mo file named in the THREDDS latest catalog")
+    return datetime.strptime(m.group(1), "%Y%m%d").replace(tzinfo=timezone.utc)
+
+
 def list_runs(fetch: Fetcher = http_get) -> list[datetime]:
     """Init times of all runs in the THREDDS catalog, oldest first."""
     raw = fetch(CATALOG_URL).decode("utf-8", "replace")
