@@ -109,3 +109,57 @@ def test_erddap_outage_fails_only_when_site_data_is_stale(calls):
     calls["obs_updated"] = 0
     _meta(calls, hours_old=30)
     assert run(calls, expect_rc=1) == "changed=false"
+
+
+class Clock:
+    """Fake monotonic clock that `sleep` advances."""
+
+    def __init__(self):
+        self.t, self.slept = 0.0, []
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.slept.append(s)
+        self.t += s
+
+
+def test_wait_for_erddap_keeps_trying_until_it_answers():
+    clock, tries = Clock(), []
+    def probe():
+        tries.append(clock.t)
+        clock.t += 120                     # a timed-out attempt takes its 2 minutes
+        if len(tries) < 3:
+            raise FetchError("Connection timed out")
+    assert build_mod.wait_for_erddap(60, probe=probe, sleep=clock.sleep, clock=clock)
+    assert len(tries) == 3 and clock.slept == [300, 300]
+
+
+def test_wait_for_erddap_gives_up_after_the_window():
+    clock, tries = Clock(), []
+    def probe():
+        tries.append(clock.t)
+        clock.t += 120
+        raise FetchError("Connection timed out")
+    assert not build_mod.wait_for_erddap(30, probe=probe, sleep=clock.sleep, clock=clock)
+    assert clock.t <= 30 * 60 + 120        # never sleeps past the deadline
+    assert len(tries) == 5                 # at 0, 7, 14, 21 and 28 min
+
+
+def test_wait_minutes_skips_the_build_while_erddap_is_down(calls, monkeypatch):
+    waited = []
+    monkeypatch.setattr(build_mod, "wait_for_erddap", lambda m: waited.append(m) or False)
+    _meta(calls, hours_old=5)
+    assert run(calls, "--wait-minutes", "60") == "changed=true"   # observations still merged
+    assert waited == [60] and calls["build"] == 0 and calls["obs"] == 1
+
+    monkeypatch.setattr(build_mod, "wait_for_erddap", lambda m: True)
+    run(calls, "--wait-minutes", "60")
+    assert calls["build"] == 1
+
+
+def test_no_wait_by_default(calls, monkeypatch):
+    monkeypatch.setattr(build_mod, "wait_for_erddap", lambda m: pytest.fail("waited"))
+    run(calls)
+    assert calls["build"] == 1

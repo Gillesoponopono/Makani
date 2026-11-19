@@ -2,7 +2,7 @@
 
 Usage:
     python -m makani.build --out web/public/data [--force] [--refresh-every-hours H]
-        [--forecast-days N] [--obs-days N] [--obs-every-hours H] [--skip-obs]
+        [--forecast-days N] [--obs-days N] [--obs-every-hours H] [--skip-obs] [--wait-minutes M]
 
 Designed to run hourly as a cheap check:
 1. Site forecast (ERDDAP): one ~13 KB request reads the dataset's coverage end
@@ -22,6 +22,11 @@ Designed to run hourly as a cheap check:
    H hours (--obs-every-hours; 0 = every time). A large --obs-days backfills
    Kahului Harbor history (NWS keeps only 7 days).
 
+PacIOOS's ERDDAP server is overloaded at times, mostly during the Hawaiʻi day
+(2026-11-19: port 443 didn't accept connections from anywhere, Hawaiʻi
+included, for long spells); --wait-minutes keeps trying every 5 minutes for up
+to M minutes before giving up on the site forecast.
+
 Exits 0 when the site forecast is fine (archive and observation failures are
 warnings); writes `changed=true|false` to $GITHUB_OUTPUT when set.
 """
@@ -31,6 +36,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from datetime import date, datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
@@ -38,7 +44,7 @@ from typing import Any
 from . import SCHEMA_VERSION, adjust, archive, erddap, mapframes, nws, obs, sky, thredds, tides, water, waves
 from .config import load_calibration, load_map, load_ratings, load_spots, local_tz
 from .jsonio import read_json, write_json_atomic
-from .net import FetchError
+from .net import FetchError, http_get
 from .ratings import classify_sector, display_kn, ms_to_kn, sports_for, uv_to_speed_dir
 from .sun import cos_zenith, sun_times
 from .validate import validate_meta, validate_spot, validate_extras
@@ -270,6 +276,33 @@ def build(out_dir: Path, *, force: bool = False, refresh_hours: float = 0, now: 
 
 DEFAULT_FORECAST_DAYS = 10
 STALE_HOURS = 24  # fail the job only when the published forecast is older than this
+WAIT_EVERY_S = 300
+
+
+def _patient_probe() -> str:
+    # A long connect timeout rides out a full connection queue on the server.
+    return erddap.coverage_end(lambda url: http_get(url, timeout=120, retries=1))
+
+
+def wait_for_erddap(minutes: float, probe=_patient_probe, sleep=time.sleep, clock=time.monotonic,
+                    every: float = WAIT_EVERY_S) -> bool:
+    """True once ERDDAP answers; keeps trying every `every` s for up to `minutes`."""
+    deadline = clock() + minutes * 60
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            probe()
+            if attempt > 1:
+                print(f"PacIOOS ERDDAP answered on attempt {attempt}.")
+            return True
+        except FetchError as exc:
+            left = deadline - clock()
+            if left <= 0:
+                return False
+            print(f"PacIOOS ERDDAP not answering (attempt {attempt}: {exc}); "
+                  f"trying again in {min(every, left) / 60:.0f} min.", flush=True)
+            sleep(min(every, left))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -286,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--obs-every-hours", type=float, default=0,
                     help="skip observations if they were checked less than H hours ago (0 = always)")
     ap.add_argument("--skip-obs", action="store_true", help="don't fetch observations")
+    ap.add_argument("--wait-minutes", type=float, default=0,
+                    help="when PacIOOS ERDDAP doesn't answer, keep trying every 5 min for up to M minutes")
     args = ap.parse_args(argv)
 
     now = datetime.now(timezone.utc)
@@ -293,15 +328,20 @@ def main(argv: list[str] | None = None) -> int:
     tz = local_tz(spots_cfg)
 
     # 1. Site forecast (cheap check; full fetch only for a new run).
-    # PacIOOS is sometimes unreachable from some GitHub runners (seen 2026-11-14):
-    # keep the published site as is, still update observations, and only fail the
-    # job once the site's data is more than STALE_HOURS old.
+    # PacIOOS's ERDDAP server is overloaded at times (wait for it with --wait-minutes):
+    # if it stays unreachable, keep the published site as is, still update
+    # observations, and only fail the job once the site's data is more than
+    # STALE_HOURS old.
     forecast_error = None
-    try:
-        forecast_changed = build(args.out, force=args.force, refresh_hours=args.refresh_every_hours, now=now)
-    except FetchError as exc:
-        forecast_changed, forecast_error = False, str(exc)
-        print(f"::warning::site forecast not updated, PacIOOS ERDDAP unreachable: {exc}")
+    if args.wait_minutes > 0 and not wait_for_erddap(args.wait_minutes):
+        forecast_changed, forecast_error = False, f"no answer for {args.wait_minutes:g} min"
+        print(f"::warning::site forecast not updated, PacIOOS ERDDAP unreachable for {args.wait_minutes:g} min")
+    else:
+        try:
+            forecast_changed = build(args.out, force=args.force, refresh_hours=args.refresh_every_hours, now=now)
+        except FetchError as exc:
+            forecast_changed, forecast_error = False, str(exc)
+            print(f"::warning::site forecast not updated, PacIOOS ERDDAP unreachable: {exc}")
 
     # 2. Forecast archive.
     migrated = archive.migrate_legacy(args.out)

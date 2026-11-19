@@ -11,6 +11,11 @@ name: Forecast data
 # branch (one commit, so git history never grows; archive files accumulate)
 # and redeploys the site. Run manually with large forecast_days / obs_days to
 # backfill history.
+#
+# PacIOOS's ERDDAP server is overloaded at times, mostly during the Hawaiʻi day
+# (10 of 30 runs on 14-19 Nov 2026 found it not accepting connections, from any
+# runner region, while it kept answering at night). The build waits for it,
+# trying every 5 min for up to 2 hours, instead of losing the whole slot.
 on:
   schedule:
     - cron: "7 * * * *"  # minute 7: away from the top-of-hour rush
@@ -42,7 +47,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # only a manual backfill takes long; hourly runs take ~30 s
+    timeout-minutes: 180  # up to 2 h waiting for PacIOOS + a manual backfill (~20 min); hourly runs take ~30 s
     outputs:
       changed: ${{ steps.build.outputs.changed }}
     steps:
@@ -74,7 +79,7 @@ jobs:
             echo "::error::git ls-remote failed ($rc)"; exit "$rc"
           fi
 
-      # Cheap diagnostics for when PacIOOS is unreachable from some runners.
+      # Cheap diagnostics for when PacIOOS is overloaded (the build then waits).
       - name: Connectivity probe
         continue-on-error: true
         run: |
@@ -86,7 +91,7 @@ jobs:
         id: build
         working-directory: pipeline
         run: >-
-          python -m makani.build --out ../data
+          python -m makani.build --out ../data --wait-minutes 120
           --forecast-days ${{ inputs.forecast_days || 10 }}
           --obs-days ${{ inputs.obs_days || 7 }}
           ${{ github.event_name == 'schedule' && '--obs-every-hours 6 --refresh-every-hours 6' || '' }}
