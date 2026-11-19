@@ -1,3 +1,5 @@
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -96,3 +98,50 @@ def test_apply_survives_a_failed_fetch():
     spot = {"id": "kanaha", "sectors": NORTH, "waves": {"swan": {"lat": 20.905, "lon": -156.445}}}
     assert waves.WaveSource("x", down).apply(spot, d) == {"status": "error"}
     assert d["hours"][0]["wave"] is None
+
+
+def swan_table(heights: dict[str, float]) -> bytes:
+    """An ERDDAP SWAN point table: UTC hour "2026-11-18T05" -> height (m)."""
+    rows = [[f"{k}:00:00Z", 0, 20.904999, 203.55501, m, 9.0, 30.0] for k, m in sorted(heights.items())]
+    return json.dumps({"table": {"columnNames": ["time", "depth", "latitude", "longitude", "shgt", "pper", "pdir"],
+                                 "rows": rows}}).encode()
+
+
+def test_heights_under_a_centimetre_are_noise():
+    # Real values from the 18 Nov 2026 cold start at Kanahā.
+    assert waves.hour_wave({"shgt": 2.8646468e-07, "pper": 2.9993868, "pdir": 15}, None, NORTH) is None
+    assert waves.hour_wave({"shgt": 0.0018078685, "pper": 3.66, "pdir": 15}, None, NORTH) is None
+    assert waves.hour_wave({"shgt": 0.023159375, "pper": 3.66, "pdir": 15}, None, NORTH)["m"] == 0.02
+    assert waves._part(0.004, 8.0, 40) is None
+
+
+def test_restart_is_a_collapse_within_one_hour():
+    assert waves.restart({"2026-11-18T05": {"shgt": 1.18}, "2026-11-18T06": {"shgt": 2.9e-07},
+                          "2026-11-18T07": {"shgt": 0.002}}) == datetime(2026, 11, 18, 6, tzinfo=timezone.utc)
+    # A calm sea that stays calm, or falls gradually, is not a restart.
+    assert waves.restart({"2026-11-18T05": {"shgt": 0.05}, "2026-11-18T06": {"shgt": 0.005}}) is None
+    assert waves.restart({"2026-11-18T05": {"shgt": 0.4}, "2026-11-18T06": {"shgt": 0.3}}) is None
+    assert waves.restart({"2026-11-18T05": {"shgt": None}, "2026-11-18T06": {"shgt": 0.0}}) is None
+
+
+def test_cold_start_blanks_the_spin_up_and_is_seen_from_before_the_window():
+    restart = datetime(2026, 11, 18, 6, tzinfo=timezone.utc)
+    heights = {}
+    for i in range(-30, 130):
+        t = restart + timedelta(hours=i)
+        heights[t.strftime("%Y-%m-%dT%H")] = 1.2 if i < 0 else 0.005 * (i + 1)
+    urls = []
+    def fetch(url):
+        urls.append(url)
+        return swan_table(heights)
+    # Forecast starts a day after the restart: the query reaches 96 h further back.
+    src = waves.WaveSource("2026-11-19T10:00:00Z", fetch)
+    hours = [restart + timedelta(hours=i) for i in (28, 95, 96, 100)]
+    doc = {"hours": [{"t": t.isoformat()} for t in hours]}
+    spot = {"id": "kanaha", "sectors": NORTH, "waves": {"swan": {"lat": 20.905, "lon": -156.445}}}
+    block = src.apply(spot, doc)
+    assert "(2026-11-15T10:00:00Z)" in urls[0]
+    assert [h["wave"] is None for h in doc["hours"]] == [True, True, False, False]
+    assert block["status"] == "ok"
+    assert block["restart"] == "2026-11-18T06:00:00Z"
+    assert block["blankUntil"] == "2026-11-22T06:00:00Z"

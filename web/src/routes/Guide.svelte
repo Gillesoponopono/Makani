@@ -73,7 +73,8 @@
       <dd>
         Height just off the beach and peak period (PacIOOS SWAN, 500 m). The type (swell, wind chop, both, flat)
         comes from the offshore split between swell and wind waves (WaveWatch III). Wind chop blowing out to sea isn't
-        counted. Kahului Harbor is sheltered: flat water, wind chop only.
+        counted. Kahului Harbor is sheltered: flat water, wind chop only. When PacIOOS restarts its wave models from
+        scratch, the swell takes days to come back in, so Makani leaves the waves blank for the first 4 days.
       </dd>
       <dt>Tide</dt>
       <dd>
